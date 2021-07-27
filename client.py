@@ -1,17 +1,12 @@
-from config import API_KEY, API_SECRET, exchange_pairs, telegram_bot_id, telegram_chat_id
-from binance import ThreadedWebsocketManager
-from binance import Client
-from decimal import Decimal
+from config import exchange_pairs, telegram_bot_id, telegram_chat_id
 import pandas as pd
-import numpy as np
 import requests
 
 # STREAM API
+
+
 kilne_tracker = {}
 data = pd.DataFrame(kilne_tracker)
-
-twm = ThreadedWebsocketManager(api_key=API_KEY, api_secret=API_SECRET)
-twm.start()
 
 def handle_socket_message(msg):
     value = float(msg['k']['c']) / float(msg['k']['o'])
@@ -46,9 +41,3 @@ def get_url(url, data):
 def send_message(text):
     url = "https://api.telegram.org/" + telegram_bot_id + "/sendMessage"
     get_url(url, text)
-
-
-for pair in exchange_pairs:
-    twm.start_kline_socket(callback=handle_socket_message, symbol=pair)
-
-twm.join()

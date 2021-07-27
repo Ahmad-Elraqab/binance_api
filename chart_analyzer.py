@@ -20,39 +20,42 @@ resistance_list = {}
 
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
 
+tickers = client.get_all_tickers()
 
-def getData():
-    for pair in exchange_pairs:
-        klines = client.get_historical_klines(
-            pair, client.KLINE_INTERVAL_4HOUR, "25 july 2021")
 
-        num = 0
-        points_list[pair] = []
-        for idx, val in enumerate(klines):
+def getData(pair, current_price):
 
-            open = float(val[1])
-            high = float(val[2])
-            low = float(val[3])
-            close = float(val[4])
+    klines = client.get_historical_klines(
+        pair, client.KLINE_INTERVAL_4HOUR, "25 july 2021")
 
-            if num != 0:
-                prev_open = float(klines[idx - 1][1])
-                prev_high = float(klines[idx - 1][2])
-                prev_low = float(klines[idx - 1][3])
-                prev_close = float(klines[idx - 1][4])
+    num = 0
 
-                if (close / open >= 1 and prev_close / prev_open < 1) or (close / open < 1 and prev_close / prev_open >= 1):
-                    obj = SR(isBottom=None, open=open,
-                             close=close, high=high, low=low)
-                    points_list[pair].append(obj)
+    points_list[pair] = []
 
-            else:
-                num = num + 1
+    for idx, val in enumerate(klines):
 
-        analyzePoint(pair, 36000.524)
+        open = float(val[1])
+        high = float(val[2])
+        low = float(val[3])
+        close = float(val[4])
 
-# for key in points_list:
-#     print(points_list[key])
+        if num != 0:
+
+            prev_open = float(klines[idx - 1][1])
+            prev_high = float(klines[idx - 1][2])
+            prev_low = float(klines[idx - 1][3])
+            prev_close = float(klines[idx - 1][4])
+
+            if (close / open >= 1 and prev_close / prev_open < 1) or (close / open < 1 and prev_close / prev_open >= 1):
+                obj = SR(isBottom=None, open=open,
+                         close=close, high=high, low=low)
+                points_list[pair].append(obj)
+
+        else:
+
+            num = num + 1
+
+        analyzePoint(pair, current_price)
 
 
 def analyzePoint(symbol, current_price):
@@ -66,9 +69,7 @@ def analyzePoint(symbol, current_price):
             resistance_list[symbol].append(point.high)
         else:
             support_list[symbol].append(point.low)
-            
-    print(find_nearest(resistance_list[symbol], current_price))
-    print(find_nearest(support_list[symbol], current_price))
+
 
 def find_nearest(array, value):
     array = np.asarray(array)
@@ -76,4 +77,8 @@ def find_nearest(array, value):
     return array[idx]
 
 
-getData()
+
+# print(len(tickers))
+for ticker in tickers:
+    print(ticker)
+
