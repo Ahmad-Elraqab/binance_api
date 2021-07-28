@@ -4,6 +4,10 @@ from binance.streams import ThreadedWebsocketManager
 import numpy as np
 from config import API_KEY, API_SECRET, exchange_pairs
 
+from binance.client import Client
+import pandas as pd
+import numpy as np
+
 
 class SR:
     def __init__(self, isBottom, open, close, high, low):
@@ -17,68 +21,41 @@ class SR:
 points_list = {}
 support_list = {}
 resistance_list = {}
-
+levels = []
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
 
 tickers = client.get_all_tickers()
 
 
-def getData(pair, current_price):
+def isSupport(df, i):
+    support = float(df[i][3]) < float(df[i-1][3]) and float(df[i][3]) < float(df[i+1][3]) \
+        and float(df[i+1][3]) < float(df[i+2][3]) and float(df[i-1][3]) < float(df[i-2][3])
+
+    return support
+
+
+def isResistance(df, i):
+    resistance = float(df[i][2]) > float(df[i-1][2]) and float(df[i][2]) > float(df[i+1][2]) \
+        and float(df[i+1][2]) > float(df[i+2][2]) and float(df[i-1][2]) > float(df[i-2][2])
+
+    return resistance
+
+
+def getData(pair):
 
     klines = client.get_historical_klines(
-        pair, client.KLINE_INTERVAL_4HOUR, "25 july 2021")
+        pair, client.KLINE_INTERVAL_1DAY, "1 oct 2020")
 
-    num = 0
+    for i, value in enumerate(klines):
 
-    points_list[pair] = []
+        if not ((i == 0) or (i == 1) or i == len(klines) or i == len(klines) - 1):
+            if isSupport(klines, i):
+                l = klines[i][3]
+                print("this is a support =>\t\t",l)
+    
+            elif isResistance(klines, i):
+                h = klines[i][2]
+                print("this is a resistance =>\t\t",h)
 
-    for idx, val in enumerate(klines):
-
-        open = float(val[1])
-        high = float(val[2])
-        low = float(val[3])
-        close = float(val[4])
-
-        if num != 0:
-
-            prev_open = float(klines[idx - 1][1])
-            prev_high = float(klines[idx - 1][2])
-            prev_low = float(klines[idx - 1][3])
-            prev_close = float(klines[idx - 1][4])
-
-            if (close / open >= 1 and prev_close / prev_open < 1) or (close / open < 1 and prev_close / prev_open >= 1):
-                obj = SR(isBottom=None, open=open,
-                         close=close, high=high, low=low)
-                points_list[pair].append(obj)
-
-        else:
-
-            num = num + 1
-
-        analyzePoint(pair, current_price)
-
-
-def analyzePoint(symbol, current_price):
-
-    resistance_list[symbol] = []
-    support_list[symbol] = []
-
-    for point in points_list[symbol]:
-
-        if point.open > current_price:
-            resistance_list[symbol].append(point.high)
-        else:
-            support_list[symbol].append(point.low)
-
-
-def find_nearest(array, value):
-    array = np.asarray(array)
-    idx = (np.abs(array - value)).argmin()
-    return array[idx]
-
-
-
-# print(len(tickers))
-for ticker in tickers:
-    print(ticker)
-
+    
+getData('BTCUSDT')
