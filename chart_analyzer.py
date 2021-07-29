@@ -153,42 +153,79 @@ def find_nearest(array, value):
 
 def tech_1(interval, symbol, current_price):
 
-    resistance_list[symbol][interval] 
-# getData("30m")
+    resistance_list[symbol][interval]
 
+
+def setOrder():
+    points_list[order.symbol][order.interval].sort()
+
+    for point in points_list[order.symbol][order.interval]:
+        if(float(point) > order.price):
+            order.AtFront(float(point))
+
+    points_list[order.symbol][order.interval].sort(reverse=True)
+
+    for point in points_list[order.symbol][order.interval]:
+        if(float(point) < order.price):
+            order.AtEnd(float(point))
+
+    order.printResistance()
+    print('\t\t\t\t')
+    order.printSupport()
 
 
 class Order:
-    def __init__(self, price, stopLose, sellPercent, resistance):
+    def __init__(self, symbol, interval, price, stopLose, sellPercent, ):
         self.price = price
-        self.stopLose = stopLose
+        self.stopLose = Node(stopLose)
         self.sellPercent = sellPercent
+        self.symbol = symbol
+        self.interval = interval
 
-    
     def sell():
         print("sell now")
 
     def buy():
         print("buy now")
 
+    def AtFront(self, newdata):
+        NewNode = Node(newdata)
+        if self.stopLose is None:
+            self.stopLose = NewNode
+            return
+        laste = self.stopLose
+        while(laste.nextval):
+            laste = laste.nextval
+        laste.nextval = NewNode
+
+    def AtEnd(self, newdata):
+        NewNode = Node(newdata)
+        if self.stopLose is None:
+            self.stopLose = NewNode
+            return
+        laste = self.stopLose
+        while(laste.backval):
+            laste = laste.backval
+        laste.backval = NewNode
+
+    def printResistance(self):
+        printval = self.stopLose
+        while printval is not None:
+            print(printval.dataval)
+            printval = printval.nextval
+
+    def printSupport(self):
+        printval = self.stopLose
+        while printval is not None:
+            print(printval.dataval)
+            printval = printval.backval
 
 
 class Node:
-   def __init__(self, dataval=None):
-      self.dataval = dataval
-      self.nextval = None
-      self.backval = None
+    def __init__(self, dataval=None):
+        self.dataval = dataval
+        self.nextval = None
+        self.backval = None
 
-# class SLinkedList:
-#    def __init__(self):
-#       self.headval = None
 
-# list1 = SLinkedList()
-# list1.headval = Node("Mon")
-# e2 = Node("Tue")
-# e3 = Node("Wed")
-# # Link first Node to second node
-# list1.headval.nextval = e2
-
-# # Link second Node to third node
-# e2.nextval = e3
+order = Order('ETHUSDT', '5m', 2200.00, 2200.00, 0.05)
