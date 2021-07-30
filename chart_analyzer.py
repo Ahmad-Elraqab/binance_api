@@ -1,3 +1,4 @@
+from models.order import Order
 from binance import Client
 import numpy as np
 from config import API_KEY, API_SECRET, exchange_pairs
@@ -46,7 +47,7 @@ def getData(interval):
 
     for pair in exchange_pairs:
         klines = client.get_historical_klines(
-            pair, getInterval(interval), "1 july 2021")
+            pair, getInterval(interval), "1 jan 2021")
 
         points_list[pair] = {}
         points_list[pair][interval] = []
@@ -88,8 +89,7 @@ def loadDate(interval):
 
             line_count += 1
 
-    # print(points_list['KMDUSDT'][interval])
-
+    return points_list
 
 def getInterval(interval):
     if interval == "1D":
@@ -151,81 +151,5 @@ def find_nearest(array, value):
     return array[idx]
 
 
-def tech_1(interval, symbol, current_price):
 
-    resistance_list[symbol][interval]
-
-
-def setOrder():
-    points_list[order.symbol][order.interval].sort()
-
-    for point in points_list[order.symbol][order.interval]:
-        if(float(point) > order.price):
-            order.AtFront(float(point))
-
-    points_list[order.symbol][order.interval].sort(reverse=True)
-
-    for point in points_list[order.symbol][order.interval]:
-        if(float(point) < order.price):
-            order.AtEnd(float(point))
-
-    order.printResistance()
-    print('\t\t\t\t')
-    order.printSupport()
-
-
-class Order:
-    def __init__(self, symbol, interval, price, stopLose, sellPercent, ):
-        self.price = price
-        self.stopLose = Node(stopLose)
-        self.sellPercent = sellPercent
-        self.symbol = symbol
-        self.interval = interval
-
-    def sell():
-        print("sell now")
-
-    def buy():
-        print("buy now")
-
-    def AtFront(self, newdata):
-        NewNode = Node(newdata)
-        if self.stopLose is None:
-            self.stopLose = NewNode
-            return
-        laste = self.stopLose
-        while(laste.nextval):
-            laste = laste.nextval
-        laste.nextval = NewNode
-
-    def AtEnd(self, newdata):
-        NewNode = Node(newdata)
-        if self.stopLose is None:
-            self.stopLose = NewNode
-            return
-        laste = self.stopLose
-        while(laste.backval):
-            laste = laste.backval
-        laste.backval = NewNode
-
-    def printResistance(self):
-        printval = self.stopLose
-        while printval is not None:
-            print(printval.dataval)
-            printval = printval.nextval
-
-    def printSupport(self):
-        printval = self.stopLose
-        while printval is not None:
-            print(printval.dataval)
-            printval = printval.backval
-
-
-class Node:
-    def __init__(self, dataval=None):
-        self.dataval = dataval
-        self.nextval = None
-        self.backval = None
-
-
-order = Order('ETHUSDT', '5m', 2200.00, 2200.00, 0.05)
+# getData('4hr')
