@@ -152,4 +152,4 @@ def find_nearest(array, value):
 
 
 
-# getData('4hr')
+# getData('1D')

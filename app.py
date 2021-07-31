@@ -10,17 +10,17 @@ twm = ThreadedWebsocketManager(api_key=API_KEY, api_secret=API_SECRET)
 
 twm.start()
 
-points_list = []
+# points_list = []
 
-points_list = loadDate("4hr")
+# points_list = loadDate("4hr")
 
-setOrder(points_list)
+# setOrder(points_list)
 
-def handle_symbol_price(msg):
-    analyzeOrder(float(msg['data']['i']))
-    # twm.stop()
+# def handle_symbol_price(msg):
+#     analyzeOrder(float(msg['data']['i']))
+#     # twm.stop()
 
-twm.start_symbol_mark_price_socket(callback=handle_symbol_price, symbol='ETHUSDT')
+# twm.start_symbol_mark_price_socket(callback=handle_symbol_price, symbol='ETHUSDT')
 
 for pair in exchange_pairs:
 
