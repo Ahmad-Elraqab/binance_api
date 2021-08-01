@@ -6,6 +6,9 @@ from binance.client import Client
 import pandas as pd
 import numpy as np
 import csv
+import xlsxwriter
+from datetime import datetime
+
 
 points_list = {}
 support_list = {}
@@ -16,6 +19,9 @@ current_rs = {}
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
 
 tickers = client.get_all_tickers()
+
+workbook = xlsxwriter.Workbook(f'files/all_days_1_june_2021.xlsx')
+worksheet = workbook.add_worksheet()
 
 
 def isSupport(df, i):
@@ -45,32 +51,42 @@ def isResistance(df, i):
 
 def getData(interval):
 
-    for pair in exchange_pairs:
+    for index, pair in enumerate(exchange_pairs):
         klines = client.get_historical_klines(
-            pair, getInterval(interval), "1 jan 2021")
+            pair, getInterval(interval), "1 july 2021")
 
-        points_list[pair] = {}
-        points_list[pair][interval] = []
+        # points_list[pair] = {}
+        # points_list[pair][interval] = []
 
+        worksheet.write(0, index+1, pair)
         for i, value in enumerate(klines):
 
-            if isSupport(klines, i):
-                l = klines[i][3]
-                points_list[pair][interval].append(
-                    {'pair': pair, 'date': pd.to_datetime(klines[i][0], unit='ms'), 'price': l})
-                # print("support at \t\t", l, "\t\t",
-                #       pd.to_datetime(klines[i][0], unit='ms'))
+            worksheet.write(
+                i+1, index+1, round((float(klines[i][4]) / float(klines[i][1]))*100-100, 2))
 
-            elif isResistance(klines, i):
-                h = klines[i][2]
-                points_list[pair][interval].append(
-                    {'pair': pair, 'date': pd.to_datetime(klines[i][0], unit='ms'), 'price': h})
-                # print("resistance at \t\t", h, "\t\t",
-                #       pd.to_datetime(klines[i][0], unit='ms'))
+            if index == 0:
+                worksheet.write(
+                    i+1, 0, klines[i][0])
 
-        data = pd.DataFrame(points_list[pair][interval])
-        data.to_csv(f'files/{interval}.csv', mode='a',
-                    index=False, header=False)
+            #     if isSupport(klines, i):
+            #         l = klines[i][3]
+            #         points_list[pair][interval].append(
+            #             {'pair': pair, 'date': pd.to_datetime(klines[i][0], unit='ms'), 'price': l})
+            #         # print("support at \t\t", l, "\t\t",
+            #         #       pd.to_datetime(klines[i][0], unit='ms'))
+
+            #     elif isResistance(klines, i):
+            #         h = klines[i][2]
+            #         points_list[pair][interval].append(
+            #             {'pair': pair, 'date': pd.to_datetime(klines[i][0], unit='ms'), 'price': h})
+            #         # print("resistance at \t\t", h, "\t\t",
+            #         #       pd.to_datetime(klines[i][0], unit='ms'))
+
+            # data = pd.DataFrame(points_list[pair][interval])
+            # data.to_csv(f'files/{interval}.csv', mode='a',
+            #             index=False, header=False)
+    print("DONE")
+    workbook.close()
 
 
 def loadDate(interval):
@@ -90,6 +106,7 @@ def loadDate(interval):
             line_count += 1
 
     return points_list
+
 
 def getInterval(interval):
     if interval == "1D":
@@ -149,7 +166,6 @@ def find_nearest(array, value):
     array = np.asarray(array)
     idx = (np.abs(array - float(value))).argmin()
     return array[idx]
-
 
 
 # getData('1D')

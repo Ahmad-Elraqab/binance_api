@@ -19,12 +19,12 @@ def handle_socket_message(msg):
 
         elif (value >= exchange_pairs[symbol]['rate']):
             kilne_tracker[symbol][time] = value
-            # print(value)
+            print(value)
             message = symbol + " = " + str(value)
             send_message(message)
         else:
             kilne_tracker[symbol][time] = value
-            # print(value)
+            print(value)
 
     else:
 
