@@ -7,7 +7,6 @@ exchange_pairs = {
 
 # exchange_pairs = {
 #     'BTCUSDT': {'rate': 1.01},
-#     'ETHUSDT': {'rate': 1.01}
 # }
 telegram_chat_id = '-566056803'
 telegram_bot_id = '1805612273:AAGq8OiJBDy1ktg-4MGEVj-7r4H3jE_2nis'
