@@ -6,38 +6,44 @@ import requests
 
 
 kilne_tracker = {}
+kilne_tracker2 = {}
 data = pd.DataFrame(kilne_tracker)
 current_volume = 0
 
 
-def handle_socket_message(msg):
-    # print(msg)
-    current_volume = float(msg['k']['q'])
-    symbol = msg['s']
+# def handle_socket_message(msg):
+#     # print(msg)
+#     current_volume = float(msg['k']['q'])
+#     symbol = msg['s']
 
-    if symbol in kilne_tracker:
-        value = kilne_tracker[symbol]
-        kilne_tracker[symbol] = current_volume
+#     if symbol in kilne_tracker:
+#         value = kilne_tracker[symbol]
+#         kilne_tracker[symbol] = current_volume
 
-        if current_volume > 3 * value:
-            print(current_volume)
+#         if current_volume > 3 * value:
+#             print(current_volume)
 
-    else:
-        kilne_tracker[symbol] = current_volume
+#     else:
+#         kilne_tracker[symbol] = current_volume
 
 
 def handle_socket_message_30m(msg):
-    value = float(msg['k']['q'])
+    volume = float(msg['k']['q'])
+    rate = float(msg['k']['c']) / float(msg['k']['o'])
     time = pd.to_datetime(msg['k']['t'], unit='ms')
     symbol = msg['s']
 
     if symbol in kilne_tracker:
         if time in kilne_tracker[symbol]:
-            kilne_tracker[symbol][time] = value
+            kilne_tracker[symbol][time]['volume'] = volume
+            kilne_tracker[symbol][time]['rate'] = rate
 
         else:
             getVolume(symbol=symbol)
-            kilne_tracker[symbol][time] = value
+            kilne_tracker[symbol][time] = {}
+            kilne_tracker[symbol][time]['volume'] = volume
+            kilne_tracker[symbol][time]['rate'] = rate
+
     else:
 
         kilne_tracker[symbol] = {}
@@ -46,37 +52,42 @@ def handle_socket_message_30m(msg):
 def getVolume(symbol):
     # print(list(kilne_tracker[symbol].values())[-1])
     # print(len(list(kilne_tracker[symbol].values())))
-    data = list(kilne_tracker[symbol].values())
+    time_stamp = list(kilne_tracker[symbol])
 
-    if len(data) >= 2:
+    if len(time_stamp) >= 2:
+        data1 = kilne_tracker[symbol][time_stamp[-1]]['volume']
+        rate1 = kilne_tracker[symbol][time_stamp[-1]]['rate']
+        data2 = kilne_tracker[symbol][time_stamp[-2]]['volume']
+        rate2 = kilne_tracker[symbol][time_stamp[-2]]['rate']
 
-        if data[-1] > 3 * data[-2]:
-            message = symbol + " = " + str(data[-1])
-            print(data[-1])
+        if data1 > 6 * data2 and rate1 >= 1 and rate2 >= 1:
+
+            message = "VOLUME METHOD " + symbol + " = " + str(data1)
             send_message(message)
 
 
-# def handle_socket_message(msg):
-#     value = float(msg['k']['c']) / float(msg['k']['o'])
-#     time = pd.to_datetime(msg['k']['t'], unit='ms')
-#     symbol = msg['s']
+def handle_socket_message(msg):
 
-#     if symbol in kilne_tracker:
-#         if time in kilne_tracker[symbol]:
-#             kilne_tracker[symbol][time] = value
+    value = float(msg['k']['c']) / float(msg['k']['o'])
+    time = pd.to_datetime(msg['k']['t'], unit='ms')
+    symbol = msg['s']
 
-#         elif (value >= exchange_pairs[symbol]['rate']):
-#             kilne_tracker[symbol][time] = value
-#             print(value)
-#             message = symbol + " = " + str(value)
-#             send_message(message)
-#         else:
-#             kilne_tracker[symbol][time] = value
-#             print(value)
+    if symbol in kilne_tracker2:
 
-#     else:
+        if time in kilne_tracker2[symbol]:
+            kilne_tracker2[symbol][time] = value
+        elif (value >= exchange_pairs[symbol]['rate']):
+            kilne_tracker2[symbol][time] = value
+            print(value)
+            message = "RATE METHOD / "+symbol + " = " + str(value)
+            send_message(message)
+        else:
+            kilne_tracker2[symbol][time] = value
+            print(value)
 
-#         kilne_tracker[symbol] = {}
+    else:
+
+        kilne_tracker2[symbol] = {}
 
 
 def get_url(url, data):

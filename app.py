@@ -23,7 +23,9 @@ twm.start()
 # twm.start_symbol_mark_price_socket(callback=handle_symbol_price, symbol='ETHUSDT')
 
 for pair in exchange_pairs:
+    # twm.start_kline_socket(
+    #     callback=handle_socket_message, symbol=pair)
     twm.start_kline_socket(
-        callback=handle_socket_message_30m, symbol=pair, interval=AsyncClient.KLINE_INTERVAL_5MINUTE)
+        callback=handle_socket_message_30m, symbol=pair, interval=AsyncClient.KLINE_INTERVAL_15MINUTE)
 
 twm.join()
