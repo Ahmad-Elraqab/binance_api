@@ -54,13 +54,16 @@ def getVolume(symbol):
     # print(len(list(kilne_tracker[symbol].values())))
     time_stamp = list(kilne_tracker[symbol])
 
-    if len(time_stamp) >= 2:
+    if len(time_stamp) >= 3:
         data1 = kilne_tracker[symbol][time_stamp[-1]]['volume']
         rate1 = kilne_tracker[symbol][time_stamp[-1]]['rate']
         data2 = kilne_tracker[symbol][time_stamp[-2]]['volume']
         rate2 = kilne_tracker[symbol][time_stamp[-2]]['rate']
+        data3 = kilne_tracker[symbol][time_stamp[-3]]['volume']
+        rate3 = kilne_tracker[symbol][time_stamp[-3]]['rate']
 
-        if data1 > 6 * data2 and rate1 >= 1 and rate2 >= 1:
+        rate1 + rate2 + rate3
+        if rate1 >= 1 and rate2 >= 1 and rate3 >= 1 and data1 > data2:
 
             message = "VOLUME METHOD " + symbol + " = " + str(data1)
             send_message(message)
