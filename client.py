@@ -63,7 +63,7 @@ def getVolume(symbol):
         rate3 = kilne_tracker[symbol][time_stamp[-3]]['rate']
 
         rate1 + rate2 + rate3
-        if rate1 >= 1 and rate2 >= 1 and rate3 >= 1 and data1 > data2:
+        if rate1 >= 1.015 and rate2 >= 1 and rate3 >= 1 and data1 > data2 and data1 >= 350000:
 
             message = "VOLUME METHOD " + symbol + " = " + str(data1)
             send_message(message)
@@ -82,7 +82,7 @@ def handle_socket_message(msg):
         elif (value >= exchange_pairs[symbol]['rate']):
             kilne_tracker2[symbol][time] = value
             print(value)
-            message = "RATE METHOD / "+symbol + " = " + str(value)
+            message = symbol + " = " + str(value)
             send_message(message)
         else:
             kilne_tracker2[symbol][time] = value
