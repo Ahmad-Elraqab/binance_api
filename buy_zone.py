@@ -12,12 +12,18 @@ ordersList = []
 
 
 class Order:
-    def __init__(self, symbol, interval, price):
+    def __init__(self, symbol, interval, price, amount, startDate, volume, qVolume):
         self.price = price
         self.stopLose = False
         self.sellProfit = False
         self.symbol = symbol
         self.interval = interval
+        self.gainProfit = 0
+        self.amount = amount
+        self.startDate = startDate
+        self.endDate = None
+        self.volume = volume
+        self.qVolume = qVolume
 
 
 def getData():
@@ -48,46 +54,61 @@ def getData():
     vwapsd = sqrt(pow(close-mean, 2).rolling(window=48).mean())
     data[col_zscore] = (close-mean)/vwapsd
 
-    data.to_csv(f'files/data.csv', index=False, header=True, mode='a')
+    df = pd.DataFrame(columns=['symbol',
+                               'interval',
+                               'price',
+                               'buyAmount',
+                               'gainProfit',
+                               'gainAmount',
+                               'totalAmount',
+                               'startDate',
+                               'endDate',
+                               'volume',
+                               'quoteVolume'
+                               ])
 
     for index, row in data.iterrows():
 
-        if row[col_zscore] <= -3.0:
+        if row[col_zscore] <= -2.5:
             ordersList.append(
-                Order(symbol='BTCUSDT', interval='30M', price=row['Close']))
-            send_message(
-                'buy at' + str(row['Close']) + ' on ' + str(row['Date']))
+                Order(symbol='BTCUSDT', interval='30M', price=row['Close'], amount=500, startDate=row['Date'], volume=row['Volume'], qVolume=row['Quote_Volume']))
+        else:
+            for order in ordersList:
 
-        for order in ordersList:
+                rate = ((row['Close'] - order.price) / order.price) * 100
 
-            # if row[col_zscore] >= 3.5:
-            #     ordersList.remove(order)
-            #     send_message('close orders at' +
-            #                  str(row['Close']) + ' on ' + str(row['Date']))
+                if order.sellProfit == True:
 
-            if row[col_zscore] >= 2.5:
-                if order.sellProfit == False:
+                    if rate >= 5.0:
+                        order.price = row['Close']
+                        order.gainProfit += rate
+
+                    elif rate <= -2.5 and order.price > row['Close']:
+                        order.gainProfit += rate
+                        order.endDate = row['Date']
+                        new_row = {'symbol': order.symbol,
+                                   'interval': order.interval,
+                                   'price': 'null',
+                                   'buyAmount': order.amount,
+                                   'gainProfit': order.gainProfit,
+                                   'gainAmount': order.gainProfit / 100 * order.amount,
+                                   'totalAmount': (order.gainProfit / 100 + 1) * order.amount,
+                                   'startDate': order.startDate,
+                                   'endDate': order.endDate,
+                                   'volume': order.volume,
+                                   'quoteVolume': order.qVolume,
+                                   }
+                        df = df.append(new_row, ignore_index=True)
+                        ordersList.remove(order)
+
+                elif row[col_zscore] >= 2.0 and rate > 0:
                     order.sellProfit = True
                     order.price = row['Close']
-                    send_message('sell profit of order at' +
-                                 str(row['Close']) + ' on ' + str(row['Date']))
+                    order.gainProfit += rate
 
-            if order.sellProfit == True:
-                if(row['Close'] - order.price) / order.price * 100 >= 5.0:
-                    order.price = row['Close']
-                    send_message('sell 5% profit of order at' +
-                                 str(row['Close']) + ' on ' + str(row['Date']))
-
-            if order.sellProfit == True:
-                if (row['Close'] - order.price) / order.price * 100 <= -2.5:
-                    ordersList.remove(order)
-                    send_message('close order on stoplose of order at' +
-                                 str(row['Close']) + ' on ' + str(row['Date']))
-            else:
-                if (row['Close'] - order.price) / order.price * 100 <= -5.0:
-                    ordersList.remove(order)
-                    send_message('close order on stoplose of order at' +
-                                 str(row['Close']) + ' on ' + str(row['Date']))
+    print(len(ordersList))
+    df.to_csv(f'files/data.csv', index=False,
+              header=True, mode='a')
 
 
 getData()
