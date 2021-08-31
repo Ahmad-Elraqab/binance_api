@@ -31,16 +31,17 @@ def zScore(window, close, volume):
     mean = (volume*close).rolling(window=window).sum() / \
         volume.rolling(window=window).sum()
 
-    vwapsd = sqrt(pow(close-mean, 2.25).rolling(window=window).mean())
+    vwapsd = sqrt(pow(close-mean, 2).rolling(window=window).mean())
 
-    return (close-mean)/vwapsd
+    print(vwapsd)
+    return (close-mean)/(vwapsd * 0.25)
 
 
 def getData(symbol):
 
     client = Client(api_key=API_KEY, api_secret=API_SECRET)
     klines = client.get_historical_klines(
-        symbol=symbol, interval=Client.KLINE_INTERVAL_5MINUTE, start_str="1 jul 2021")
+        symbol=symbol, interval=Client.KLINE_INTERVAL_30MINUTE, start_str="1 jun 2020")
 
     data = pd.DataFrame(klines)
     data[0] = pd.to_datetime(data[0], unit='ms')
@@ -77,15 +78,15 @@ def getData(symbol):
 
     for index, row in data.iterrows():
 
-        if row['199-zscore'] <= -2.5 or row['484-zscore'] <= -2.5:
+        if row['199-zscore'] <= -9.0 or row['484-zscore'] <= -9.0:
             ordersList.append(
-                Order(symbol=symbol, interval='5M', price=row['Close'], amount=500, startDate=row['Date'], volume=row['Volume'], qVolume=row['Quote_Volume']))
+                Order(symbol=symbol, interval='30M', price=row['Close'], amount=500, startDate=row['Date'], volume=row['Volume'], qVolume=row['Quote_Volume']))
         else:
             for order in ordersList:
 
                 rate = ((row['Close'] - order.price) / order.price) * 100
 
-                if row['48-zscore'] >= 1.75:
+                if row['48-zscore'] >= 3.5:
                     order.gainProfit += rate
                     order.endDate = row['Date']
                     new_row = {'symbol': order.symbol,
@@ -107,10 +108,11 @@ def getData(symbol):
     print(len(ordersList))
     df.to_csv(f'files/'+symbol+'.csv', index=False,
               header=True, mode='a')
+    # data.to_csv(f'files/data.csv', index=False, header=True)
 
 
-for key, value in enumerate(exchange_pairs):
-    getData(symbol=value)
+# for key, value in enumerate(exchange_pairs):
+getData(symbol='ADAUSDT')
 
 
 def handle_socket_buy_zone(data):
