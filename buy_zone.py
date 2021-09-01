@@ -41,7 +41,7 @@ def getData(symbol):
 
     client = Client(api_key=API_KEY, api_secret=API_SECRET)
     klines = client.get_historical_klines(
-        symbol=symbol, interval=Client.KLINE_INTERVAL_30MINUTE, start_str="1 jun 2020")
+        symbol=symbol, interval=Client.KLINE_INTERVAL_30MINUTE, start_str="1 aug 2021")
 
     data = pd.DataFrame(klines)
     data[0] = pd.to_datetime(data[0], unit='ms')
@@ -86,7 +86,57 @@ def getData(symbol):
 
                 rate = ((row['Close'] - order.price) / order.price) * 100
 
-                if row['48-zscore'] >= 3.5:
+                # if row['48-zscore'] >= 2.5:
+                #     order.gainProfit += rate
+                #     order.endDate = row['Date']
+                #     new_row = {'symbol': order.symbol,
+                #                'interval': order.interval,
+                #                'price': 'null',
+                #                'buyAmount': order.amount,
+                #                'gainProfit': order.gainProfit,
+                #                'gainAmount': order.gainProfit / 100 * order.amount,
+                #                'totalAmount': (order.gainProfit / 100 + 1) * order.amount,
+                #                'startDate': order.startDate,
+                #                'endDate': order.endDate,
+                #                'avgDate': order.endDate - order.startDate,
+                #                'volume': order.volume,
+                #                'quoteVolume': order.qVolume,
+                #                }
+                #     df = df.append(new_row, ignore_index=True)
+                #     ordersList.remove(order)
+                if order.sellProfit == True:
+
+                    if rate >= 5.0:
+                        order.price = row['Close']
+                        order.gainProfit += rate
+
+                    elif rate <= -1.0 and order.price > row['Close']:
+                        order.gainProfit += rate
+                        order.endDate = row['Date']
+                        new_row = {'symbol': order.symbol,
+                                   'interval': order.interval,
+                                   'price': 'null',
+                                   'buyAmount': order.amount,
+                                   'gainProfit': order.gainProfit,
+                                   'gainAmount': order.gainProfit / 100 * order.amount,
+                                   'totalAmount': (order.gainProfit / 100 + 1) * order.amount,
+                                   'startDate': order.startDate,
+                                   'endDate': order.endDate,
+                                   'volume': order.volume,
+                                   'quoteVolume': order.qVolume,
+                                   }
+                        df = df.append(
+                            new_row, ignore_index=True)
+                        ordersList.remove(order)
+
+                elif row['48-zscore'] >= 2.8 and rate >= 0:
+
+                    order.sellProfit = True
+                    order.price = row['Close']
+                    order.gainProfit += rate
+
+                elif rate <= -5.0:
+
                     order.gainProfit += rate
                     order.endDate = row['Date']
                     new_row = {'symbol': order.symbol,
@@ -98,21 +148,25 @@ def getData(symbol):
                                'totalAmount': (order.gainProfit / 100 + 1) * order.amount,
                                'startDate': order.startDate,
                                'endDate': order.endDate,
-                               'avgDate': order.endDate - order.startDate,
                                'volume': order.volume,
                                'quoteVolume': order.qVolume,
                                }
-                    df = df.append(new_row, ignore_index=True)
+                    df = df.append(
+                        new_row, ignore_index=True)
                     ordersList.remove(order)
 
     print(len(ordersList))
-    df.to_csv(f'files/'+symbol+'.csv', index=False,
+    df.to_csv(f'files/data2.csv', index=False,
               header=True, mode='a')
     # data.to_csv(f'files/data.csv', index=False, header=True)
 
 
-# for key, value in enumerate(exchange_pairs):
-getData(symbol='ADAUSDT')
+for key, value in enumerate(exchange_pairs):
+
+    try:
+        getData(symbol=value)
+    except:
+        print(value + ' caused exception...')
 
 
 def handle_socket_buy_zone(data):
