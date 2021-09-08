@@ -73,4 +73,21 @@
 # else:
 # continue
 
-
+# if row['48-zscore'] >= 2.5:
+#     order.gainProfit += rate
+#     order.endDate = row['Date']
+#     new_row = {'symbol': order.symbol,
+#                'interval': order.interval,
+#                'price': 'null',
+#                'buyAmount': order.amount,
+#                'gainProfit': order.gainProfit,
+#                'gainAmount': order.gainProfit / 100 * order.amount,
+#                'totalAmount': (order.gainProfit / 100 + 1) * order.amount,
+#                'startDate': order.startDate,
+#                'endDate': order.endDate,
+#                'avgDate': order.endDate - order.startDate,
+#                'volume': order.volume,
+#                'quoteVolume': order.qVolume,
+#                }
+#     df = df.append(new_row, ignore_index=True)
+#     ordersList.remove(order)
