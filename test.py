@@ -1,8 +1,13 @@
+from matplotlib import pyplot as plt
 from config import API_KEY, API_SECRET
 from binance.client import Client
 import pandas as pd
 
+
 def getData(symbol):
+
+    API_KEY = 'yo3Wx8sTYwGt9Lz5f3vuAiaosy7esnAxCjFnDrmmqq0NdLZ0pk5RQl4aK91lmO6w'
+    API_SECRET = 'ldJo4Hw0rLUDPX8P5zm5d3TYsvJYLA5ikm7GEDhSb33xSMFcDrF8u7rRGZLvwr7s'
 
     client = Client(api_key=API_KEY, api_secret=API_SECRET)
     klines = client.get_historical_klines(
@@ -26,8 +31,4 @@ def getData(symbol):
         data['Low'].rolling(14).min())
 
     data['volatility ratio'].plot()
-    
-
-
-    data.to_csv(f'files/data2.csv', index=False,
-                header=True, mode='a')
+    plt.show()

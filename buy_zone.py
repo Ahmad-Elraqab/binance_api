@@ -72,7 +72,10 @@ def getData(symbol):
         (
         data['High'].rolling(14).max() -
         data['Low'].rolling(14).min())
-        
+
+    data['volatility ratio'].plot()
+    plt.show()
+
     # data.to_csv(f'files/data2.csv', index=False,
     #             header=True, mode='a')
 
