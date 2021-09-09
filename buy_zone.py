@@ -13,7 +13,8 @@ ordersList = []
 
 
 class Order:
-    def __init__(self, symbol, interval, price, amount, startDate, volume, qVolume, buyPrice):
+    def __init__(self, type, symbol, interval, price, amount, startDate, volume, qVolume, buyPrice):
+        self.type = type
         self.price = price
         self.stopLose = False
         self.sellProfit = False
@@ -68,101 +69,124 @@ def getData(symbol):
     data['199-zscore'] = zScore(window=199, close=close, volume=volume)
     data['484-zscore'] = zScore(window=484, close=close, volume=volume)
 
-    data['volatility ratio'] = (high - low) / \
-        (
-        data['High'].rolling(14).max() -
-        data['Low'].rolling(14).min())
+    # data['volatility ratio'] = (high - low) / \
+    #     (
+    #     data['High'].rolling(14).max() -
+    #     data['Low'].rolling(14).min())
 
-    data['volatility ratio'].plot()
-    plt.show()
+    # data['volatility ratio'].plot()
+    # plt.show()
 
     # data.to_csv(f'files/data2.csv', index=False,
     #             header=True, mode='a')
 
-    # df = pd.DataFrame(columns=['symbol',
-    #                            'interval',
-    #                            'buyPrice',
-    #                            'sellPrice',
-    #                            'buyAmount',
-    #                            'gainProfit',
-    #                            'gainAmount',
-    #                            'totalAmount',
-    #                            'startDate',
-    #                            'endDate',
-    #                            'avgDate',
-    #                            'sellVolume',
-    #                            'volume',
-    #                            'quoteVolume',
-    #                            'sellList'
-    #                            ])
+    df = pd.DataFrame(columns=['symbol',
+                               'type',
+                               'interval',
+                               'buyPrice',
+                               'sellPrice',
+                               'buyAmount',
+                               'gainProfit',
+                               'gainAmount',
+                               'totalAmount',
+                               'startDate',
+                               'endDate',
+                               'avgDate',
+                               'sellVolume',
+                               'volume',
+                               'quoteVolume',
+                               'sellList'
+                               ])
 
-    # for index, row in data.iterrows():
+    for index, row in data.iterrows():
 
-    #     if row['199-zscore'] <= -9.0 or row['484-zscore'] <= -9.0:
+        if row['199-zscore'] <= -9.0 or row['484-zscore'] <= -9.0:
+            print('Buy 199||484')
+            ordersList.append(
+                Order(symbol=symbol, type='199||484', interval='30M', buyPrice=row['Close'], price=[row['Close']], amount=500, startDate=row['Date'], volume=row['Volume'], qVolume=row['Quote_Volume']))
 
-    #         ordersList.append(
-    #             Order(symbol=symbol, interval='30M', buyPrice=row['Close'], price=[row['Close']], amount=500, startDate=row['Date'], volume=row['Volume'], qVolume=row['Quote_Volume']))
-    #     else:
-    #         for order in ordersList:
+        elif row['48-zscore'] <= -9.0:
 
-    #             rate = ((row['Close'] - order.price[-1]) /
-    #                     order.price[-1]) * 100
+            print('Buy||48')
+            ordersList.append(
+                Order(symbol=symbol, type='48', interval='30M', buyPrice=row['Close'], price=[row['Close']], amount=500, startDate=row['Date'], volume=row['Volume'], qVolume=row['Quote_Volume']))
 
-    #             if order.sellProfit == True:
+        else:
+            for order in ordersList:
 
-    #                 if rate >= 5.0:
-    #                     order.price.append(row['Close'])
-    #                     order.gainProfit += rate
-    #                     order.sellList.append(pd.to_datetime(row['Date']))
-    #                     order.sellVolume.append(row['Volume'])
+                rate = ((row['Close'] - order.price[-1]) /
+                        order.price[-1]) * 100
 
-    #                 # elif rate <= -1.0 and row['Close'] > order.price[0]:
-    #                 elif rate <= -1.0:
-    #                     order.gainProfit += rate
-    #                     order.endDate = row['Date']
-    #                     order.price.append(row['Close'])
-    #                     order.sellList.append(row['Date'])
-    #                     new_row = {'symbol': order.symbol,
-    #                                'interval': order.interval,
-    #                                'buyPrice': order.buyPrice,
-    #                                'sellPrice': order.price,
-    #                                'buyAmount': order.amount,
-    #                                'gainProfit': order.gainProfit,
-    #                                'gainAmount': order.gainProfit / 100 * order.amount,
-    #                                'totalAmount': (order.gainProfit / 100 + 1) * order.amount,
-    #                                'startDate': order.startDate,
-    #                                'endDate': order.endDate,
-    #                                'sellVolume': order.sellVolume,
-    #                                'volume': order.volume,
-    #                                'quoteVolume': order.qVolume,
-    #                                'sellList': order.sellList
-    #                                }
-    #                     df = df.append(
-    #                         new_row, ignore_index=True)
-    #                     ordersList.remove(order)
+                if order.type == '199||484' and rate >= 5.0:
 
-    #             elif row['48-zscore'] >= 2.5:
+                    order.price.append(row['Close'])
+                    order.gainProfit += rate
+                    order.sellList.append(pd.to_datetime(row['Date']))
+                    order.sellVolume.append(row['Volume'])
+                elif order.type == '48' and rate >= 6.0:
+                    order.gainProfit += rate
+                    order.endDate = row['Date']
+                    order.price.append(row['Close'])
+                    order.sellList.append(row['Date'])
+                    new_row = {'symbol': order.symbol,
+                               'type': order.type,
+                               'interval': order.interval,
+                               'buyPrice': order.buyPrice,
+                               'sellPrice': order.price,
+                               'buyAmount': order.amount,
+                               'gainProfit': order.gainProfit,
+                               'gainAmount': order.gainProfit / 100 * order.amount,
+                               'totalAmount': (order.gainProfit / 100 + 1) * order.amount,
+                               'startDate': order.startDate,
+                               'endDate': order.endDate,
+                               'sellVolume': order.sellVolume,
+                               'volume': order.volume,
+                               'quoteVolume': order.qVolume,
+                               'sellList': order.sellList
+                               }
+                    ordersList.remove(order)
+                    df = df.append(
+                        new_row, ignore_index=True)
+                elif rate <= -5.0:
+                    order.gainProfit += rate
+                    order.endDate = row['Date']
+                    order.sellVolume.append(row['Volume'])
+                    order.price.append(row['Close'])
+                    order.sellList.append(row['Date'])
+                    new_row = {'symbol': order.symbol,
+                               'type': order.type,
+                               'interval': order.interval,
+                               'buyPrice': order.buyPrice,
+                               'sellPrice': order.price,
+                               'buyAmount': order.amount,
+                               'gainProfit': order.gainProfit,
+                               'gainAmount': order.gainProfit / 100 * order.amount,
+                               'totalAmount': (order.gainProfit / 100 + 1) * order.amount,
+                               'startDate': order.startDate,
+                               'endDate': order.endDate,
+                               'sellVolume': order.sellVolume,
+                               'volume': order.volume,
+                               'quoteVolume': order.qVolume,
+                               'sellList': order.sellList
+                               }
+                    ordersList.remove(order)
+                    df = df.append(
+                        new_row, ignore_index=True)
 
-    #                 order.sellProfit = True
-    #                 order.price.append(row['Close'])
-    #                 order.gainProfit += rate
-    #                 order.sellList.append(pd.to_datetime(row['Date']))
-    #                 order.sellVolume.append(row['Volume'])
-
-    # print(len(ordersList))
-    # df.to_csv(f'files/data2.csv', index=False,
-    #           header=True, mode='a')
+    print(len(ordersList))
+    df.to_csv(f'files/data2.csv', index=False,
+              header=True, mode='a')
     # data.to_csv(f'files/data.csv', index=False, header=True)
 
 
-# for key, value in enumerate(exchange_pairs):
+for key, value in enumerate(exchange_pairs):
 
-#     try:
-#         getData(symbol=value)
-#     except:
-#         print(value + ' caused exception...')
+    try:
+        getData(symbol=value)
+    except:
+        print(value + ' caused exception...')
 
-getData(symbol='BTCUSDT')
+# getData(symbol='BTCUSDT')
 
 
 def handle_socket_buy_zone(data):
