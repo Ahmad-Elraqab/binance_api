@@ -14,7 +14,7 @@ ordersList = []
 kilne_tracker = {}
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
 klines = client.get_historical_klines(
-    symbol='BTCUSDT', interval=Client.KLINE_INTERVAL_5MINUTE, start_str="1 day ago")
+    symbol='SOLUSDT', interval=Client.KLINE_INTERVAL_5MINUTE, start_str="1 day ago")
 
 data = pd.DataFrame(klines)
 
@@ -30,6 +30,33 @@ data = data.drop(columns=['IGNORE',
 
 data['Close'] = pd.to_numeric(
     data['Close'], errors='coerce')
+
+
+df = pd.DataFrame(columns=['symbol',
+                           'type',
+                           'interval',
+                           'buyPrice',
+                           'sellPrice',
+                           'buyAmount',
+                           'gainProfit',
+                           'gainAmount',
+                           'totalAmount',
+                           'startDate',
+                           'endDate',
+                           'avgDate',
+                           'sellVolume',
+                           'volume',
+                           'quoteVolume',
+                           'sellList',
+                           'buyBlack',
+                           'buyRed',
+                           'buyBlue',
+                           'buyRatio',
+                           'sellBlack',
+                           'sellRed',
+                           'sellBlue',
+                           'sellRetio',
+                           ])
 
 
 class Order:
@@ -73,7 +100,7 @@ def getData(symbol):
 
     client = Client(api_key=API_KEY, api_secret=API_SECRET)
     klines = client.get_historical_klines(
-        symbol=symbol, interval=Client.KLINE_INTERVAL_5MINUTE, start_str="13 sep 2021")
+        symbol=symbol, interval=Client.KLINE_INTERVAL_5MINUTE, start_str="20 sep 2021")
 
     data = pd.DataFrame(klines)
     data[0] = pd.to_datetime(data[0], unit='ms')
@@ -140,7 +167,7 @@ def getData(symbol):
 
     for index, row in data.iterrows():
 
-        if row['48-zscore'] <= -2.0 and data['volatility ratio'] >= 0.4:
+        if row['48-zscore'] <= -3.5:
             ordersList.append(
                 Order(symbol=symbol, type='48', interval='30M', buyPrice=row['Close'], price=[row['Close']], amount=500,
                       startDate=row['Date'], volume=row['Volume'], qVolume=row['Quote_Volume'], buyBlack=pd.to_numeric(
@@ -156,7 +183,7 @@ def getData(symbol):
                 if order.type == '48':
 
                     # if row['48-zscore'] >= 2.0 and rate > 0.0:
-                    if rate >= 2.5:
+                    if rate >= 0.0 and rate > 0.0:
                         order.gainProfit += rate
                         order.endDate = row['Date']
                         order.price.append(row['Close'])
@@ -233,8 +260,7 @@ def getData(symbol):
                     #     ordersList.remove(order)
                     #     df = df.append(
                     #         new_row, ignore_index=True)
-
-    print(len(ordersList))
+    df['holding orders'] = len(ordersList)
     df.to_csv(f'files/data2.csv', index=False,
               header=True, mode='a')
     ordersList.clear()
@@ -266,7 +292,58 @@ def setDatafFame():
     data['Min'] = min
     data['volatility ratio'] = (high - low) / (data['Max'] - data['Min'])
 
-    print(data)
+    # print(data)
+
+
+def sell(symbol, time, close):
+    for order in ordersList:
+
+        rate = ((data.iloc[-1]['Close'] - order.price[-1]) /
+                order.price[-1]) * 100
+
+        if data.iloc[-1]['48-zscore'] >= 2.5 and rate > 0.0:
+            order.gainProfit += rate
+            order.endDate = data.iloc[-1]['Date']
+            order.price.append(data.iloc[-1]['Close'])
+            order.sellList.append(data.iloc[-1]['Date'])
+            order.sellBlack = pd.to_numeric(data.iloc[-1]['48-zscore'])
+            order.sellRed = pd.to_numeric(data.iloc[-1]['484-zscore'])
+            order.sellBlue = pd.to_numeric(data.iloc[-1]['199-zscore'])
+            order.sellRatio = pd.to_numeric(
+                data.iloc[-1]['volatility ratio'])
+
+            new_row = {'symbol': order.symbol,
+                       'type': order.type,
+                       'interval': order.interval,
+                       'buyPrice': order.buyPrice,
+                       'sellPrice': order.price,
+                       'buyAmount': order.amount,
+                       'gainProfit': order.gainProfit,
+                       'gainAmount': order.gainProfit / 100 * order.amount,
+                       'totalAmount': (order.gainProfit / 100 + 1) * order.amount,
+                       'startDate': order.startDate,
+                       'endDate': order.endDate,
+                       'sellVolume': order.sellVolume,
+                       'volume': order.volume,
+                       'quoteVolume': order.qVolume,
+                       'sellList': order.sellList,
+                       'buyBlack': order.buyBlack,
+                       'buyRed': order.buyRed,
+                       'buyBlue': order.buyBlue,
+                       'buyRatio': order.buyRatio,
+                       'sellBlack': order.sellBlack,
+                       'sellRed': order.sellRed,
+                       'sellBlue': order.sellBlue,
+                       'sellRatio': order.sellRatio
+                       }
+            message = ' اغلاق صفقة '+symbol + ' من تاريخ ' + str(order.startDate) + \
+                ' على سعر ' + close + ' بتاريخ ' + \
+                str(time) + ' بربح ' + str(rate)
+            send_message(message)
+            print('sell ' + symbol)
+            ordersList.remove(order)
+            df = df.append(
+                new_row, ignore_index=True)
 
 
 def handle_socket(msg):
@@ -319,3 +396,33 @@ def handle_socket(msg):
             'Quote_Volume': qVolume,
         }, ignore_index=True)
         setDatafFame()
+
+    if data.iloc[-1]['48-zscore'] <= -2.35:
+        ordersList.append(
+            Order(symbol=symbol, type='48',
+                  interval='5m',
+                  buyPrice=data.iloc[-1]['Close'],
+                  price=[data.iloc[-1]['Close']],
+                  amount=500,
+                  startDate=data.iloc[-1]['Date'],
+                  volume=data.iloc[-1]['Volume'],
+                  qVolume=data.iloc[-1]['Quote_Volume'],
+                  buyBlack=pd.to_numeric(data.iloc[-1]['48-zscore']),
+                  buyRed=pd.to_numeric(data.iloc[-1]['484-zscore']),
+                  buyBlue=pd.to_numeric(data.iloc[-1]['199-zscore']),
+                  buyRatio=pd.to_numeric(data.iloc[-1]['volatility ratio'])
+                  )
+        )
+        message = ' شراء عملة ' + symbol+' على سعر ' + \
+            str(close) + ' بتاريخ ' + str(time)
+        print('buy ' + symbol)
+        send_message(message)
+
+        sell(symbol=symbol, time=time, close=close)
+
+# for pair in exchange_pairs:
+
+#     try:
+#         getData(symbol=pair)
+#     except:
+#         print(pair + ' caused error')

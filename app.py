@@ -33,6 +33,6 @@ twm.start()
 #         callback=handle_socket_message_30m, symbol=pair, interval=AsyncClient.KLINE_INTERVAL_5MINUTE)
 setDatafFame()
 twm.start_kline_socket(
-    callback=handle_socket, symbol='BTCUSDT', interval=AsyncClient.KLINE_INTERVAL_5MINUTE)
+    callback=handle_socket, symbol='SOLUSDT', interval=AsyncClient.KLINE_INTERVAL_5MINUTE)
 
 twm.join()
