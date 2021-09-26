@@ -5,7 +5,7 @@ from binance.streams import ThreadedWebsocketManager
 from client import handle_socket_message, handle_socket_message_30m
 import pandas as pd
 from chart_analyzer import getData, analyzePoint, loadDate
-from buy_zone import handle_socket, setDatafFame
+from buy_zone import handle_socket, readHistory, setDatafFame
 
 twm = ThreadedWebsocketManager(api_key=API_KEY, api_secret=API_SECRET)
 
@@ -31,8 +31,12 @@ twm.start()
 #     #     callback=handle_socket_message, symbol=pair)
 #     twm.start_kline_socket(
 #         callback=handle_socket_message_30m, symbol=pair, interval=AsyncClient.KLINE_INTERVAL_5MINUTE)
-setDatafFame()
-twm.start_kline_socket(
-    callback=handle_socket, symbol='DOGEUSDT', interval=AsyncClient.KLINE_INTERVAL_5MINUTE)
+readHistory()
+
+for pair in exchange_pairs:
+
+    twm.start_kline_socket(
+        callback=handle_socket, symbol=pair, interval=AsyncClient.KLINE_INTERVAL_5MINUTE)
+
 
 twm.join()
