@@ -13,23 +13,6 @@ import matplotlib.pyplot as plt
 ordersList = {}
 kilne_tracker = {}
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
-# klines = client.get_historical_klines(
-#     symbol='DOGEUSDT', interval=Client.KLINE_INTERVAL_5MINUTE, start_str="2 days ago")
-
-# data = pd.DataFrame(klines)
-
-# data[0] = pd.to_datetime(data[0], unit='ms')
-
-
-# data.columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'IGNORE', 'Quote_Volume',
-#                 'Trades_Count', 'BUY_VOL', 'BUY_VOL_VAL', 'x']
-
-# data = data.drop(columns=['IGNORE',
-#                           'Trades_Count', 'BUY_VOL', 'BUY_VOL_VAL', 'x'])
-
-# data['Close'] = pd.to_numeric(
-#     data['Close'], errors='coerce')
-
 
 df = pd.DataFrame(columns=['symbol',
                            'type',
@@ -105,10 +88,10 @@ def setDatafFame(symbol):
 
     kilne_tracker[symbol]['48-zscore'] = zScore(
         window=48, close=close, volume=volume)
-    kilne_tracker[symbol]['199-zscore'] = zScore(
-        window=199, close=close, volume=volume)
-    kilne_tracker[symbol]['484-zscore'] = zScore(
-        window=484, close=close, volume=volume)
+    # kilne_tracker[symbol]['199-zscore'] = zScore(
+    #     window=199, close=close, volume=volume)
+    # kilne_tracker[symbol]['484-zscore'] = zScore(
+    #     window=484, close=close, volume=volume)
 
     # a = kilne_tracker[symbol]['High'].shift(1).rolling(14).max()
     # b = kilne_tracker[symbol]['High'].shift(1).rolling(15).max()
@@ -142,7 +125,7 @@ def readHistory():
 
             data = pd.DataFrame(klines)
 
-            data[0] = pd.to_datetime(data[0], unit='ms')
+            # data[0] = pd.to_datetime(data[0], unit='ms')
 
             data.columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'IGNORE', 'Quote_Volume',
                             'Trades_Count', 'BUY_VOL', 'BUY_VOL_VAL', 'x']
@@ -160,7 +143,7 @@ def readHistory():
             print(i + ' caused error')
 
 
-def sell(symbol, time, close):
+def sell(symbol, time):
 
     try:
         list = ordersList
@@ -171,7 +154,7 @@ def sell(symbol, time, close):
                         value.price[-1]) * 100
 
                 # if kilne_tracker[symbol].iloc[-1]['48-zscore'] >= -1.0 and rate > 0.0:
-                if rate >= 2.5:
+                if rate >= 2.0:
                     value.gainProfit += rate
                     value.endDate = kilne_tracker[symbol].iloc[-1]['Date']
                     value.price.append(kilne_tracker[symbol].iloc[-1]['Close'])
@@ -179,12 +162,6 @@ def sell(symbol, time, close):
                         kilne_tracker[symbol].iloc[-1]['Date'])
                     value.sellBlack = pd.to_numeric(
                         kilne_tracker[symbol].iloc[-1]['48-zscore'])
-                    value.sellRed = pd.to_numeric(
-                        kilne_tracker[symbol].iloc[-1]['484-zscore'])
-                    value.sellBlue = pd.to_numeric(
-                        kilne_tracker[symbol].iloc[-1]['199-zscore'])
-                    value.sellRatio = pd.to_numeric(
-                        kilne_tracker[symbol].iloc[-1]['volatility ratio'])
 
                     new_row = {'symbol': value.symbol,
                                'type': value.type,
@@ -201,17 +178,17 @@ def sell(symbol, time, close):
                                'volume': value.volume,
                                'quoteVolume': value.qVolume,
                                'sellList': value.sellList,
-                               'buyBlack': value.buyBlack,
-                               'buyRed': value.buyRed,
-                               'buyBlue': value.buyBlue,
-                               'buyRatio': value.buyRatio,
-                               'sellBlack': value.sellBlack,
-                               'sellRed': value.sellRed,
-                               'sellBlue': value.sellBlue,
-                               'sellRatio': value.sellRatio
+                               'buyBlack': 0,
+                               'buyRed': 0,
+                               'buyBlue': 0,
+                               'buyRatio': 0,
+                               'sellBlack': 0,
+                               'sellRed': 0,
+                               'sellBlue': 0,
+                               'sellRatio': 0,
                                }
                     message = ' اغلاق صفقة ' + str(symbol) + ' من تاريخ ' + str(value.startDate) + \
-                        ' على سعر ' + str(close) + ' بتاريخ ' + \
+                        ' على سعر ' + str(kilne_tracker[symbol].iloc[-1]['Close']) + ' بتاريخ ' + \
                         str(time) + ' بربح ' + str(rate)
                     send_message(message)
                     print('sell ' + symbol)
@@ -223,34 +200,20 @@ def sell(symbol, time, close):
                     df.to_csv(f'files/data2.csv', index=False,
                               header=True, mode='a')
     except:
-        print('Error')
+        print('Selling error...')
 
 
-def handle_socket(msg):
+def updateFrame(symbol, msg):
 
     try:
-        for i in ordersList.keys():
-
-            if i == None:
-
-                ordersList.pop(i)
-
-        volume = float(msg['k']['v'])
-        qVolume = float(msg['k']['q'])
-        time = pd.to_datetime(msg['k']['t'], unit='ms')
-        close = float(msg['k']['c'])
-        open = float(msg['k']['o'])
-        high = float(msg['k']['h'])
-        low = float(msg['k']['l'])
+        time = msg['k']['t']
         symbol = msg['s']
 
-        # print(str(time) + '   ----   ' + str(close))
         check = np.where(
             kilne_tracker[symbol].iloc[-1][0] == time, True, False)
 
         if check == True:
 
-            # print(check)
             kilne_tracker[symbol]['Open'] = kilne_tracker[symbol]['Open'].replace(
                 kilne_tracker[symbol].iloc[-1]['Open'], float(msg['k']['o']))
 
@@ -269,48 +232,73 @@ def handle_socket(msg):
             kilne_tracker[symbol]['Quote_Volume'] = kilne_tracker[symbol]['Quote_Volume'].replace(
                 kilne_tracker[symbol].iloc[-1]['Quote_Volume'], float(msg['k']['q']))
 
-            setDatafFame(symbol=symbol)
-
         else:
-            if kilne_tracker[symbol].iloc[-1]['48-zscore'] <= -2.35 and time not in ordersList:
-                ordersList[time] = Order(symbol=symbol, type='48',
-                                         interval='5m',
-                                         buyPrice=kilne_tracker[symbol].iloc[-1]['Close'],
-                                         price=[
-                                             kilne_tracker[symbol].iloc[-1]['Close']],
-                                         amount=500,
-                                         startDate=kilne_tracker[symbol].iloc[-1]['Date'],
-                                         volume=kilne_tracker[symbol].iloc[-1]['Volume'],
-                                         qVolume=kilne_tracker[symbol].iloc[-1]['Quote_Volume'],
-                                         buyBlack=pd.to_numeric(
-                                             kilne_tracker[symbol].iloc[-1]['48-zscore']),
-                                         buyRed=pd.to_numeric(
-                                             kilne_tracker[symbol].iloc[-1]['484-zscore']),
-                                         buyBlue=pd.to_numeric(
-                                             kilne_tracker[symbol].iloc[-1]['199-zscore']),
-                                         buyRatio=0
-                                         )
 
-                message = ' شراء عملة ' + symbol+' على سعر ' + \
-                    str(close) + ' بتاريخ ' + \
-                    str(kilne_tracker[symbol].iloc[-1]['Date'])
-                print('buy ' + symbol)
-                send_message(message)
             kilne_tracker[symbol] = kilne_tracker[symbol].append({
                 'Date': time,
-                'Open': open,
-                'High': high,
-                'Low': low,
-                'Close': close,
-                'Volume': volume,
-                'Quote_Volume': qVolume,
+                'Open': msg['k']['o'],
+                'High': msg['k']['h'],
+                'Low': msg['k']['l'],
+                'Close': msg['k']['c'],
+                'Volume': msg['k']['v'],
+                'Quote_Volume': msg['k']['q'],
             }, ignore_index=True)
+
             setDatafFame(symbol=symbol)
 
-        sell(symbol=symbol, time=time, close=close)
+            buy(symbol, time)
 
     except:
-        print('Error in data transfare')
+
+        print('Error while updating data...')
+
+
+def buy(symbol, time):
+
+    try:
+        if kilne_tracker[symbol].iloc[-2]['48-zscore'] <= -1.0 and time not in ordersList:
+            ordersList[time] = Order(symbol=symbol, type='48',
+                                     interval='5m',
+                                     buyPrice=kilne_tracker[symbol].iloc[-2]['Close'],
+                                     price=[
+                                         kilne_tracker[symbol].iloc[-2]['Close']],
+                                     amount=500,
+                                     startDate=pd.to_datetime(
+                                         kilne_tracker[symbol].iloc[-2]['Date']),
+                                     volume=kilne_tracker[symbol].iloc[-2]['Volume'],
+                                     qVolume=kilne_tracker[symbol].iloc[-2]['Quote_Volume'],
+                                     buyBlack=pd.to_numeric(
+                                         kilne_tracker[symbol].iloc[-2]['48-zscore']),
+                                     buyRed=0,
+                                     buyBlue=0,
+                                     buyRatio=0
+                                     )
+
+            message = ' شراء عملة ' + symbol+' على سعر ' + \
+                str(kilne_tracker[symbol].iloc[-2]['Close']) + ' بتاريخ ' + \
+                str(pd.to_datetime(kilne_tracker[symbol].iloc[-2]['Date'])) + \
+                ' zscore ' + str(kilne_tracker[symbol].iloc[-2]['48-zscore'])
+            print('buy ' + symbol)
+            send_message(message)
+    except:
+        print('Error while buying...')
+
+
+def handle_socket(msg):
+
+    time = pd.to_datetime(msg['k']['t'], unit='ms')
+    symbol = msg['s']
+
+    updateFrame(symbol, msg)
+
+    for i in ordersList.keys():
+
+        if i == None:
+
+            ordersList.pop(i)
+
+    sell(symbol=symbol, time=time)
+
 
 # for pair in exchange_pairs:
 

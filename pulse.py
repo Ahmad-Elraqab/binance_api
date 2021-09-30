@@ -1,5 +1,6 @@
 from binance.client import Client
 from numpy import sqrt
+import numpy
 import pandas as pd
 from config import API_KEY, API_SECRET
 
@@ -14,53 +15,9 @@ def zScore(window, close, volume):
     return (close-mean)/(vwapsd)
 
 
-class Node:
-    def __init__(self, dataval=None):
-        self.dataval = dataval
-        self.nextval = None
-
-
-class SLinkedList:
-    def __init__(self):
-        self.headval = None
-
-    def listprint(self):
-        printval = self.headval
-        while printval is not None:
-            print(printval.dataval)
-            printval = printval.nextval
-
-    def checkSize(self):
-
-        head = self.headval
-        count = 0
-
-        while head.nextval is not None:
-
-            count += 1
-            head = head.nextval
-
-        return count
-
-    def add(self, newNode):
-
-        head = self.headval
-        size = self.checkSize()
-
-        if size >= 4:
-
-            head = head.nextval
-
-        while head.nextval is not None:
-
-            head = head.nextval
-
-        head.nextval = newNode
-
-
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
 klines = client.get_historical_klines(
-    symbol='ETHUSDT', interval=Client.KLINE_INTERVAL_5MINUTE, start_str="15 sep 2021")
+    symbol='BTCUSDT', interval=Client.KLINE_INTERVAL_30MINUTE, start_str="1 aug 2021")
 
 data = pd.DataFrame(klines)
 data[0] = pd.to_datetime(data[0], unit='ms')
@@ -78,3 +35,29 @@ volume = pd.to_numeric(data['Volume'])
 data['48-zscore'] = zScore(window=48, close=close, volume=volume)
 data['199-zscore'] = zScore(window=199, close=close, volume=volume)
 data['484-zscore'] = zScore(window=484, close=close, volume=volume)
+
+
+def outlier_treatment(datacolumn):
+
+    for key, value in enumerate(datacolumn):
+        # print(key)
+        # print(value)
+        dataframe = sorted(datacolumn[key: key+15])
+        Q1 = numpy.percentile(dataframe, 25, interpolation='midpoint')
+        Q2 = numpy.percentile(dataframe, 50, interpolation='midpoint')
+        Q3 = numpy.percentile(dataframe, 75, interpolation='midpoint')
+        IQR = Q3 - Q1
+        lower_range = Q1 - (1.5 * IQR)
+        upper_range = Q3 + (1.5 * IQR)
+
+        data['IQR'] = IQR
+        data['lower_range'] = lower_range
+        data['upper_range'] = upper_range
+
+    # print(str(lower_range) + '------' + str(upper_range))
+    # return lower_range, upper_range
+    data.to_csv(f'files/data.csv', index=False, header=True)
+
+
+outlier_treatment(data['Close'])
+# data['Q1'], data['Q3'] = outlier_treatment(data['Close'].rolling(15).)
