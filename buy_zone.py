@@ -100,7 +100,7 @@ def readHistory():
         try:
 
             klines = client.get_historical_klines(
-                symbol=i, interval=Client.KLINE_INTERVAL_5MINUTE, start_str="2 days ago")
+                symbol=i, interval=Client.KLINE_INTERVAL_5MINUTE, start_str="1 days ago")
 
             data = pd.DataFrame(klines)
 
@@ -124,12 +124,13 @@ def readHistory():
             print(i + ' caused error')
 
 
-def sell(symbol, time):
+def sell(time):
 
     list = ordersList
     for key, value in list.items():
 
-        if value.symbol == symbol:
+        try:
+            symbol = value.symbol
             rate = ((float(kilne_tracker[symbol].iloc[-1]['Close']) - float(value.price[-1])) /
                     float(value.price[-1])) * 100
 
@@ -179,12 +180,8 @@ def sell(symbol, time):
                     new_row, ignore_index=True)
                 df.to_csv(f'files/data2.csv', index=False,
                           header=True, mode='a')
-
-            else:
-                print('rate = ' + str(rate))
-        else:
-
-            print('symbol doesnt exist!')
+        except:
+            print('')
 
 
 def buy(symbol, time):
@@ -229,27 +226,15 @@ def updateFrame(symbol, msg):
 
     if check == True:
 
-        kilne_tracker[symbol]['Open'] = kilne_tracker[symbol]['Open'].replace(
-            kilne_tracker[symbol].iloc[-1]['Open'], float(msg['k']['o']))
-
-        kilne_tracker[symbol]['Close'] = kilne_tracker[symbol]['Close'].replace(
-            kilne_tracker[symbol].iloc[-1]['Close'], float(msg['k']['c']))
-
-        kilne_tracker[symbol]['High'] = kilne_tracker[symbol]['High'].replace(
-            kilne_tracker[symbol].iloc[-1]['High'], float(msg['k']['h']))
-
-        kilne_tracker[symbol]['Low'] = kilne_tracker[symbol]['Low'].replace(
-            kilne_tracker[symbol].iloc[-1]['Low'], float(msg['k']['l']))
-
-        kilne_tracker[symbol]['Volume'] = kilne_tracker[symbol]['Volume'].replace(
-            kilne_tracker[symbol].iloc[-1]['Volume'], float(msg['k']['v']))
-
-        kilne_tracker[symbol]['Quote_Volume'] = kilne_tracker[symbol]['Quote_Volume'].replace(
-            kilne_tracker[symbol].iloc[-1]['Quote_Volume'], float(msg['k']['q']))
+        
+        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('Open')] =  float(msg['k']['o'])
+        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('High')] =  float(msg['k']['h'])
+        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('Low')] =  float(msg['k']['l'])
+        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('Close')] =  float(msg['k']['c'])
+        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('Volume')] =  float(msg['k']['v'])
+        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('Quote_Volume')] =  float(msg['k']['q'])
 
     else:
-        kilne_tracker[symbol]['Close'] = kilne_tracker[symbol]['Close'].replace(
-            kilne_tracker[symbol].iloc[-1]['Close'], kilne_tracker[symbol].iloc[-1]['Close'] + 0.001)
 
         kilne_tracker[symbol] = kilne_tracker[symbol].append({
             'Date': time,
