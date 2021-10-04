@@ -22,8 +22,8 @@ client = Client(api_key=API_KEY, api_secret=API_SECRET)
 
 tickers = client.get_all_tickers()
 
-workbook = xlsxwriter.Workbook(f'files/all_days_1_june_2021.xlsx')
-worksheet = workbook.add_worksheet()
+# workbook = xlsxwriter.Workbook(f'files/all_days_1_june_2021.xlsx')
+# worksheet = workbook.add_worksheet()
 
 
 def isSupport(df, i):
@@ -55,7 +55,7 @@ def getData(interval):
 
     for index, pair in enumerate(exchange_pairs):
         klines = client.get_historical_klines(
-            pair, getInterval(interval), "15 sep 2021")
+            pair, getInterval(interval), "1 aug 2021")
 
         points_list[pair] = {}
         points_list[pair][interval] = []
@@ -69,7 +69,6 @@ def getData(interval):
         df = df.drop(columns=['IGNORE',
                               'Trades_Count', 'BUY_VOL', 'BUY_VOL_VAL', 'x'])
 
-        # worksheet.write(0, index+1, pair)
         df = df.set_index('Date')
         df['Close'] = pd.to_numeric(
             df['Close'], errors='coerce')
@@ -84,56 +83,41 @@ def getData(interval):
 
         sr = pd.DataFrame(columns=['pair', 'Date', 'price'])
 
-        list = []
+        # list = []
 
         for i, value in enumerate(klines):
 
-            # worksheet.write(
-            #     i+1, index+1, round((float(klines[i][4]) / float(klines[i][1]))*100-100, 2))
-
-            # if index == 0:
-            #     worksheet.write(
-            #         i+1, 0, klines[i][0])
-
             if isSupport(klines, i):
                 l = klines[i][3]
-                # sr = sr.append(
-                #     {'pair': pair,
-                #      'Date': pd.to_datetime(klines[i][0], unit='ms'),
-                #      'price': l
-                #      }, ignore_index=True
-                # )
-                list.append(pd.to_numeric(l))
-                # print("support at \t\t", l, "\t\t",
-                #       pd.to_datetime(klines[i][0], unit='ms'))
+                sr = sr.append(
+                    {'pair': pair,
+                     'Date': pd.to_datetime(klines[i][0], unit='ms'),
+                     'price': l
+                     }, ignore_index=True
+                )
+                # list.append(pd.to_numeric(l))
 
             elif isResistance(klines, i):
                 h = klines[i][2]
-                # sr = sr.append(
-                #     {'pair': pair,
-                #      'Date': pd.to_datetime(klines[i][0], unit='ms'),
-                #      'price': h
-                #      }, ignore_index=True
-                # )
-                list.append(pd.to_numeric(h))
-                # print("resistance at \t\t", h, "\t\t",
-                #       pd.to_datetime(klines[i][0], unit='ms'))
+                sr = sr.append(
+                    {'pair': pair,
+                     'Date': pd.to_datetime(klines[i][0], unit='ms'),
+                     'price': h
+                     }, ignore_index=True
+                )
+                # list.append(pd.to_numeric(h))
 
-            # data = pd.DataFrame(points_list[pair][interval])
-            # data.to_csv(f'files/{interval}.csv', mode='a',
-            #             index=False, header=False)
+        sr.to_csv(f'SR/{pair}.csv', mode='a',
+                    index=False, header=False)
 
         # pd.to_numeric(df['Close']).plot()
         # pd.to_numeric(sr['price']).plot()
         # mpf.hlines(y=pd.to_numeric(sr['price']), xmin=0, xmax=60, colors='red')
-
-        mpf.plot(df, type='candle', style='yahoo',
-                 volume=True, hlines=list)
-
-        plt.show()
+        # mpf.plot(df, type='candle', style='yahoo',
+        #          volume=True, hlines=list)
+        # plt.show()
 
     print("DONE")
-    # workbook.close()
 
 
 def loadDate(interval):
@@ -215,4 +199,4 @@ def find_nearest(array, value):
     return array[idx]
 
 
-getData('4hr')
+getData('1D')
