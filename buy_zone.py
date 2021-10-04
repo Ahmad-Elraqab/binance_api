@@ -226,13 +226,18 @@ def updateFrame(symbol, msg):
 
     if check == True:
 
-        
-        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('Open')] =  float(msg['k']['o'])
-        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('High')] =  float(msg['k']['h'])
-        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('Low')] =  float(msg['k']['l'])
-        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('Close')] =  float(msg['k']['c'])
-        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('Volume')] =  float(msg['k']['v'])
-        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('Quote_Volume')] =  float(msg['k']['q'])
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('Open')] = float(msg['k']['o'])
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('High')] = float(msg['k']['h'])
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('Low')] = float(msg['k']['l'])
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('Close')] = float(msg['k']['c'])
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('Volume')] = float(msg['k']['v'])
+        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol]
+                                   .columns.get_loc('Quote_Volume')] = float(msg['k']['q'])
 
     else:
 
@@ -271,7 +276,7 @@ def handle_socket(msg):
         # else:/
             # print(i)
 
-    sell(symbol=symbol, time=time)
+    sell(time=time)
 
 
 # for pair in exchange_pairs:

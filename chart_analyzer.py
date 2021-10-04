@@ -1,4 +1,5 @@
 from models.order import Order
+from matplotlib import pyplot as plt
 from binance import Client
 import numpy as np
 from config import API_KEY, API_SECRET, exchange_pairs
@@ -8,6 +9,7 @@ import numpy as np
 import csv
 import xlsxwriter
 from datetime import datetime
+import mplfinance as mpf
 
 
 points_list = {}
@@ -53,40 +55,85 @@ def getData(interval):
 
     for index, pair in enumerate(exchange_pairs):
         klines = client.get_historical_klines(
-            pair, getInterval(interval), "1 july 2021")
+            pair, getInterval(interval), "15 sep 2021")
 
-        # points_list[pair] = {}
-        # points_list[pair][interval] = []
+        points_list[pair] = {}
+        points_list[pair][interval] = []
 
-        worksheet.write(0, index+1, pair)
+        df = pd.DataFrame(klines)
+        df[0] = pd.to_datetime(df[0], unit='ms')
+
+        df.columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'IGNORE', 'Quote_Volume',
+                      'Trades_Count', 'BUY_VOL', 'BUY_VOL_VAL', 'x']
+
+        df = df.drop(columns=['IGNORE',
+                              'Trades_Count', 'BUY_VOL', 'BUY_VOL_VAL', 'x'])
+
+        # worksheet.write(0, index+1, pair)
+        df = df.set_index('Date')
+        df['Close'] = pd.to_numeric(
+            df['Close'], errors='coerce')
+        df['Open'] = pd.to_numeric(
+            df['Open'], errors='coerce')
+        df['High'] = pd.to_numeric(
+            df['High'], errors='coerce')
+        df['Low'] = pd.to_numeric(
+            df['Low'], errors='coerce')
+        df['Volume'] = pd.to_numeric(
+            df['Volume'], errors='coerce')
+
+        sr = pd.DataFrame(columns=['pair', 'Date', 'price'])
+
+        list = []
+
         for i, value in enumerate(klines):
 
-            worksheet.write(
-                i+1, index+1, round((float(klines[i][4]) / float(klines[i][1]))*100-100, 2))
+            # worksheet.write(
+            #     i+1, index+1, round((float(klines[i][4]) / float(klines[i][1]))*100-100, 2))
 
-            if index == 0:
-                worksheet.write(
-                    i+1, 0, klines[i][0])
+            # if index == 0:
+            #     worksheet.write(
+            #         i+1, 0, klines[i][0])
 
-            #     if isSupport(klines, i):
-            #         l = klines[i][3]
-            #         points_list[pair][interval].append(
-            #             {'pair': pair, 'date': pd.to_datetime(klines[i][0], unit='ms'), 'price': l})
-            #         # print("support at \t\t", l, "\t\t",
-            #         #       pd.to_datetime(klines[i][0], unit='ms'))
+            if isSupport(klines, i):
+                l = klines[i][3]
+                # sr = sr.append(
+                #     {'pair': pair,
+                #      'Date': pd.to_datetime(klines[i][0], unit='ms'),
+                #      'price': l
+                #      }, ignore_index=True
+                # )
+                list.append(pd.to_numeric(l))
+                # print("support at \t\t", l, "\t\t",
+                #       pd.to_datetime(klines[i][0], unit='ms'))
 
-            #     elif isResistance(klines, i):
-            #         h = klines[i][2]
-            #         points_list[pair][interval].append(
-            #             {'pair': pair, 'date': pd.to_datetime(klines[i][0], unit='ms'), 'price': h})
-            #         # print("resistance at \t\t", h, "\t\t",
-            #         #       pd.to_datetime(klines[i][0], unit='ms'))
+            elif isResistance(klines, i):
+                h = klines[i][2]
+                # sr = sr.append(
+                #     {'pair': pair,
+                #      'Date': pd.to_datetime(klines[i][0], unit='ms'),
+                #      'price': h
+                #      }, ignore_index=True
+                # )
+                list.append(pd.to_numeric(h))
+                # print("resistance at \t\t", h, "\t\t",
+                #       pd.to_datetime(klines[i][0], unit='ms'))
 
             # data = pd.DataFrame(points_list[pair][interval])
             # data.to_csv(f'files/{interval}.csv', mode='a',
             #             index=False, header=False)
+
+        # pd.to_numeric(df['Close']).plot()
+        # pd.to_numeric(sr['price']).plot()
+        # mpf.hlines(y=pd.to_numeric(sr['price']), xmin=0, xmax=60, colors='red')
+
+        mpf.plot(df, type='candle', style='yahoo',
+                 volume=True, hlines=list)
+
+        plt.show()
+
     print("DONE")
-    workbook.close()
+    # workbook.close()
 
 
 def loadDate(interval):
@@ -168,4 +215,4 @@ def find_nearest(array, value):
     return array[idx]
 
 
-# getData('1D')
+getData('4hr')
