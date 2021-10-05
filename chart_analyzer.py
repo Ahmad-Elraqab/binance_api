@@ -1,29 +1,92 @@
+from os import close
+from time import time
 from models.order import Order
 from matplotlib import pyplot as plt
 from binance import Client
-import numpy as np
 from config import API_KEY, API_SECRET, exchange_pairs
-from binance.client import Client
+from binance.client import AsyncClient, Client
+from datetime import datetime
+from binance.streams import ThreadedWebsocketManager
+import numpy as np
 import pandas as pd
 import numpy as np
 import csv
 import xlsxwriter
-from datetime import datetime
 import mplfinance as mpf
 
 
 points_list = {}
 support_list = {}
 resistance_list = {}
-
 current_rs = {}
+isSet = False
 
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
-
 tickers = client.get_all_tickers()
 
-# workbook = xlsxwriter.Workbook(f'files/all_days_1_june_2021.xlsx')
-# worksheet = workbook.add_worksheet()
+
+class Order:
+    def __init__(self):
+        self.id = 'id'
+        self.isSet = False
+        self.isBuy = False
+        self.goal1 = None
+        self.goal2 = None
+        self.stoplose = None
+        self.head = Node(value=0)
+
+
+class Node:
+    def __init__(self, value):
+
+        self.next = None
+        self.before = None
+        self.value = value
+
+    def pushAfter(self, node):
+
+        head = self
+        while head.next is not None:
+
+            head = head.next
+
+        head.next = node
+
+    def pushBefore(self, node):
+
+        head = self
+
+        temp = head.before
+
+        head.before = node
+
+        node.before = temp
+
+    def printNext(self):
+
+        head = self
+
+        print('--Resistance--')
+        while head.next is not None:
+
+            print(head.next.value)
+
+            head = head.next
+
+        print('--------------')
+
+    def printBefore(self):
+
+        head = self
+
+        print('----Support----')
+        while head.before is not None:
+
+            print(head.before.value)
+
+            head = head.before
+
+        print('---------------')
 
 
 def isSupport(df, i):
@@ -107,12 +170,12 @@ def getData(interval):
                 )
                 # list.append(pd.to_numeric(h))
 
-        sr.to_csv(f'SR/{pair}.csv', mode='a',
-                    index=False, header=False)
+        sr = sr.sort_values(["price"], ascending=True)
+        sr.to_csv(f'SR/{pair}@ticker.csv', mode='a',
+                  index=False, header=False)
 
         # pd.to_numeric(df['Close']).plot()
         # pd.to_numeric(sr['price']).plot()
-        # mpf.hlines(y=pd.to_numeric(sr['price']), xmin=0, xmax=60, colors='red')
         # mpf.plot(df, type='candle', style='yahoo',
         #          volume=True, hlines=list)
         # plt.show()
@@ -199,4 +262,64 @@ def find_nearest(array, value):
     return array[idx]
 
 
-getData('1D')
+def load_sr(symbol, price):
+
+    if points_list[symbol]['order'].isSet == False:
+        print('True')
+        with open(f'SR/{symbol}@ticker.csv') as csv_file:
+
+            csv_reader = csv.reader(csv_file, delimiter=',')
+
+            for row in csv_reader:
+
+                node = Node(value=row[2])
+                if row[2] > price:
+                    points_list[symbol]['order'].head.pushAfter(node)
+                else:
+                    points_list[symbol]['order'].head.pushBefore(node)
+
+            points_list[symbol]['order'].isSet = True
+
+
+def init():
+    for pair in exchange_pairs:
+        points_list[pair] = {}
+        points_list[pair]['time'] = {}
+        points_list[pair]['order'] = Order()
+
+
+
+def handle_price_socket(msg):
+
+    # 1 - load prev orders.
+    # 2 - load pairs SR and set them.
+    load_sr(msg['k']['s'], msg['k']['c'])
+
+    # 3 - detect new orders.
+
+    time = msg['k']['t']
+    symbol = msg['k']['s']
+    close = msg['k']['c']
+
+    if time in points_list[symbol]['time']:
+
+        print('exist!')
+        print(points_list)
+
+    else:
+
+        points_list[symbol]['time'][time] = close
+
+
+init()
+
+twm = ThreadedWebsocketManager(api_key=API_KEY, api_secret=API_SECRET)
+
+twm.start()
+
+for pair in exchange_pairs:
+    twm.start_kline_socket(
+        callback=handle_price_socket, symbol=pair, interval=AsyncClient.KLINE_INTERVAL_5MINUTE)
+twm.join()
+
+# getData('1D')
