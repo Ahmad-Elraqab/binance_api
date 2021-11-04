@@ -1,11 +1,13 @@
 from os import close
+
+from binance.streams import ThreadedWebsocketManager
 from models.node import Node
 from numpy import sqrt
 import numpy as np
 from pandas.core.frame import DataFrame
 from pandas.core.tools.numeric import to_numeric
 from config import API_KEY, API_SECRET, exchange_pairs
-from binance.client import Client
+from binance.client import AsyncClient, Client
 from client import send_message
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -100,7 +102,7 @@ def readHistory():
         try:
 
             klines = client.get_historical_klines(
-                symbol=i, interval=Client.KLINE_INTERVAL_5MINUTE, start_str="1 days ago")
+                symbol=i, interval=Client.KLINE_INTERVAL_4HOUR, start_str="1 month ago")
 
             data = pd.DataFrame(klines)
 
@@ -135,7 +137,7 @@ def sell(time):
                     float(value.price[-1])) * 100
 
             # if kilne_tracker[symbol].iloc[-1]['48-zscore'] >= -1.0 and rate > 0.0:
-            if rate >= 3.0:
+            if rate >= 15.0:
                 value.gainProfit += rate
                 value.endDate = kilne_tracker[symbol].iloc[-1]['Date']
                 value.price.append(kilne_tracker[symbol].iloc[-1]['Close'])
@@ -187,7 +189,7 @@ def sell(time):
 def buy(symbol, time):
 
     # try:
-    if kilne_tracker[symbol].iloc[-2]['48-zscore'] <= -2.35 and time not in ordersList:
+    if kilne_tracker[symbol].iloc[-2]['48-zscore'] <= -1.0 and time not in ordersList:
         ordersList[time] = Order(symbol=symbol, type='48',
                                  interval='5m',
                                  buyPrice=kilne_tracker[symbol].iloc[-2]['Close'],
@@ -285,3 +287,15 @@ def handle_socket(msg):
 #         getData(symbol=pair)
 #     except:
 #         print(pair + ' caused error')
+
+
+readHistory()
+
+twm = ThreadedWebsocketManager(api_key=API_KEY, api_secret=API_SECRET)
+
+twm.start()
+
+for pair in exchange_pairs:
+    twm.start_kline_socket(
+        callback=handle_socket, symbol=pair, interval=AsyncClient.KLINE_INTERVAL_4HOUR)
+twm.join()
