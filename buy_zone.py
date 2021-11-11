@@ -1,4 +1,6 @@
 from os import close
+import threading
+import time
 
 from binance.streams import ThreadedWebsocketManager
 from models.node import Node
@@ -42,11 +44,11 @@ df = pd.DataFrame(columns=['symbol',
                            'sellRetio',
                            ])
 
-
 class Order:
     def __init__(self, type, symbol, interval, price, amount, startDate, volume, qVolume, buyPrice, buyBlack, buyRed, buyRatio, buyBlue):
         self.type = type
         self.price = price
+        self.isSold = False
         self.stopLose = False
         self.sellProfit = False
         self.buyPrice = buyPrice
@@ -69,7 +71,6 @@ class Order:
         self.sellBlue = 0,
         self.sellRetio = 0,
 
-
 def zScore(window, close, volume):
 
     mean = (volume*close).rolling(window=window).sum() / \
@@ -78,7 +79,6 @@ def zScore(window, close, volume):
     vwapsd = sqrt(pow(close-mean, 2).rolling(window=window).mean())
 
     return (close-mean)/(vwapsd)
-
 
 def setDatafFame(symbol):
 
@@ -92,7 +92,6 @@ def setDatafFame(symbol):
     kilne_tracker[symbol].to_csv(
         f'files/'+symbol+'@data.csv', index=False, header=True)
 
-
 def readHistory():
     print('start reading history of ' +
           str(len(exchange_pairs)) + ' USDT pairs...')
@@ -102,7 +101,7 @@ def readHistory():
         try:
 
             klines = client.get_historical_klines(
-                symbol=i, interval=Client.KLINE_INTERVAL_4HOUR, start_str="1 month ago")
+                symbol=i, interval=Client.KLINE_INTERVAL_5MINUTE, start_str="10 hours ago")
 
             data = pd.DataFrame(klines)
 
@@ -125,42 +124,42 @@ def readHistory():
 
             print(i + ' caused error')
 
+def sell(s,time):
 
-def sell(time):
+    list = ordersList[s]['list']
+    for i in list:
 
-    list = ordersList
-    for key, value in list.items():
+        if i.isSold == False:
+            symbol = i.symbol
+            rate = ((float(kilne_tracker[symbol].iloc[-1]['Close']) - float(i.price[-1])) /
+                    float(i.price[-1])) * 100
 
-        try:
-            symbol = value.symbol
-            rate = ((float(kilne_tracker[symbol].iloc[-1]['Close']) - float(value.price[-1])) /
-                    float(value.price[-1])) * 100
-
-            # if kilne_tracker[symbol].iloc[-1]['48-zscore'] >= -1.0 and rate > 0.0:
-            if rate >= 15.0:
-                value.gainProfit += rate
-                value.endDate = kilne_tracker[symbol].iloc[-1]['Date']
-                value.price.append(kilne_tracker[symbol].iloc[-1]['Close'])
-                value.sellList.append(
+            if rate >= 3.0:
+                i.isSold = True                
+                ordersList[s]['isBuy'] = False
+                i.gainProfit += rate
+                i.endDate = kilne_tracker[symbol].iloc[-1]['Date']
+                i.price.append(kilne_tracker[symbol].iloc[-1]['Close'])
+                i.sellList.append(
                     kilne_tracker[symbol].iloc[-1]['Date'])
-                value.sellBlack = pd.to_numeric(
+                i.sellBlack = pd.to_numeric(
                     kilne_tracker[symbol].iloc[-1]['48-zscore'])
 
-                new_row = {'symbol': value.symbol,
-                           'type': value.type,
-                           'interval': value.interval,
-                           'buyPrice': value.buyPrice,
-                           'sellPrice': value.price,
-                           'buyAmount': value.amount,
-                           'gainProfit': value.gainProfit,
-                           'gainAmount': value.gainProfit / 100 * value.amount,
-                           'totalAmount': (value.gainProfit / 100 + 1) * value.amount,
-                           'startDate': value.startDate,
-                           'endDate': value.endDate,
-                           'sellVolume': value.sellVolume,
-                           'volume': value.volume,
-                           'quoteVolume': value.qVolume,
-                           'sellList': value.sellList,
+                new_row = {'symbol': i.symbol,
+                           'type': i.type,
+                           'interval': i.interval,
+                           'buyPrice': i.buyPrice,
+                           'sellPrice': i.price,
+                           'buyAmount': i.amount,
+                           'gainProfit': i.gainProfit,
+                           'gainAmount': i.gainProfit / 100 * i.amount,
+                           'totalAmount': (i.gainProfit / 100 + 1) * i.amount,
+                           'startDate': i.startDate,
+                           'endDate': i.endDate,
+                           'sellVolume': i.sellVolume,
+                           'volume': i.volume,
+                           'quoteVolume': i.qVolume,
+                           'sellList': i.sellList,
                            'buyBlack': 0,
                            'buyRed': 0,
                            'buyBlue': 0,
@@ -170,26 +169,65 @@ def sell(time):
                            'sellBlue': 0,
                            'sellRatio': 0,
                            }
-                message = ' اغلاق صفقة ' + str(symbol) + ' من تاريخ ' + str(value.startDate) + \
+                message = ' اغلاق صفقة ' + str(symbol) + ' من تاريخ ' + str(i.startDate) + \
                     ' على سعر ' + str(kilne_tracker[symbol].iloc[-1]['Close']) + ' بتاريخ ' + \
                     str(time) + ' بربح ' + str(rate)
                 send_message(message)
-                print('sell ' + symbol)
-
-                ordersList[key] = None
-                global df
                 df = df.append(
                     new_row, ignore_index=True)
-                df.to_csv(f'files/data2.csv', index=False,
+                df.to_csv(f'results/data@zscore.csv', index=False,
                           header=True, mode='a')
-        except:
-            print('')
+                          
+            elif rate <= -5.0:
+                i.isSold = True
+                ordersList[s]['isBuy'] = False
+                i.gainProfit += rate
+                i.endDate = kilne_tracker[symbol].iloc[-1]['Date']
+                i.price.append(kilne_tracker[symbol].iloc[-1]['Close'])
+                i.sellList.append(
+                    kilne_tracker[symbol].iloc[-1]['Date'])
+                i.sellBlack = pd.to_numeric(
+                    kilne_tracker[symbol].iloc[-1]['48-zscore'])
 
+                new_row = {'symbol': i.symbol,
+                           'type': i.type,
+                           'interval': i.interval,
+                           'buyPrice': i.buyPrice,
+                           'sellPrice': i.price,
+                           'buyAmount': i.amount,
+                           'gainProfit': i.gainProfit,
+                           'gainAmount': i.gainProfit / 100 * i.amount,
+                           'totalAmount': (i.gainProfit / 100 + 1) * i.amount,
+                           'startDate': i.startDate,
+                           'endDate': i.endDate,
+                           'sellVolume': i.sellVolume,
+                           'volume': i.volume,
+                           'quoteVolume': i.qVolume,
+                           'sellList': i.sellList,
+                           'buyBlack': 0,
+                           'buyRed': 0,
+                           'buyBlue': 0,
+                           'buyRatio': 0,
+                           'sellBlack': 0,
+                           'sellRed': 0,
+                           'sellBlue': 0,
+                           'sellRatio': 0,
+                           }
+                message = ' اغلاق صفقة ' + str(symbol) + ' من تاريخ ' + str(i.startDate) + \
+                    ' على سعر ' + str(kilne_tracker[symbol].iloc[-1]['Close']) + ' بتاريخ ' + \
+                    str(time) + ' بخسارة ' + str(rate)
+                send_message(message)
+                
+                df = df.append(
+                        new_row, ignore_index=True)
+                df.to_csv(f'results/data@zscore.csv', index=False,
+                            header=True, mode='a')
 
 def buy(symbol, time):
 
     # try:
-    if kilne_tracker[symbol].iloc[-2]['48-zscore'] <= -1.0 and time not in ordersList:
+    if kilne_tracker[symbol].iloc[-2]['48-zscore'] <= -2.5 and ordersList[symbol]['isBuy'] == False:
+        ordersList[symbol]['isBuy'] = True
         ordersList[time] = Order(symbol=symbol, type='48',
                                  interval='5m',
                                  buyPrice=kilne_tracker[symbol].iloc[-2]['Close'],
@@ -216,6 +254,20 @@ def buy(symbol, time):
     # except:
     #     print('Error while buying...')
 
+def init():
+    for pair in exchange_pairs:
+        ordersList[pair] = {}
+        ordersList[pair]['list'] = []
+        ordersList[pair]['isBuy'] = False
+
+def realtime(msg):
+
+    if 'data' in msg:
+            # Your code
+            handle_socket(msg['data'])
+
+    else:
+            stream.stream_error = True
 
 def updateFrame(symbol, msg):
 
@@ -260,7 +312,6 @@ def updateFrame(symbol, msg):
 
     #     print('Error while updating data...')
 
-
 def handle_socket(msg):
 
     time = pd.to_datetime(msg['k']['t'], unit='ms')
@@ -268,34 +319,40 @@ def handle_socket(msg):
 
     updateFrame(symbol, msg)
 
-    for i in ordersList.keys():
+    sell(symbol,time=time)
 
-        if i == None:
-
-            # print(i)
-            ordersList.pop(i)
-
-        # else:/
-            # print(i)
-
-    sell(time=time)
-
-
-# for pair in exchange_pairs:
-
-#     try:
-#         getData(symbol=pair)
-#     except:
-#         print(pair + ' caused error')
-
+init()
 
 readHistory()
 
-twm = ThreadedWebsocketManager(api_key=API_KEY, api_secret=API_SECRET)
+class Stream():
+        
+    def start(self):
+        self.bm = ThreadedWebsocketManager(api_key=API_KEY, api_secret=API_SECRET)
+        self.bm.start()
+        self.stream_error = False
+        self.multiplex_list = list()
+            
+        # listOfPairings: all pairs with USDT (over 250 items in list)
+        for pairing in exchange_pairs:
+            self.multiplex_list.append(pairing.lower() + '@kline_5m')
+        self.multiplex = self.bm.start_multiplex_socket(callback = realtime, streams = self.multiplex_list)
+        
+        # monitoring the error
+        stop_trades = threading.Thread(target = stream.restart_stream, daemon = True)
+        stop_trades.start()
+        
+        
+    def restart_stream(self):
+        while True:
+            time.sleep(1)
+            if self.stream_error == True:
+                self.bm.stop_socket(self.multiplex)
+                time.sleep(5)
+                self.stream_error = False
+                self.multiplex = self.bm.start_multiplex_socket(callback = realtime, streams = self.multiplex_list)
 
-twm.start()
+stream = Stream()
+stream.start()
+stream.bm.join()
 
-for pair in exchange_pairs:
-    twm.start_kline_socket(
-        callback=handle_socket, symbol=pair, interval=AsyncClient.KLINE_INTERVAL_4HOUR)
-twm.join()

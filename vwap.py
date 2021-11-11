@@ -31,6 +31,7 @@ mult6 = 3.000
 mult7 = 3.500
 mult8 = 4.000
 
+
 class Order:
     def __init__(self):
         self.id = 'id'
@@ -42,6 +43,7 @@ class Order:
         self.goal2 = None
         self.stoplose = None
         self.head = Node(value=0)
+
 
 class Node:
     def __init__(self, value):
@@ -94,7 +96,7 @@ class Node:
             head = head.before
 
         print('---------------')
-    
+
     def deleteAllNextNodes(self):
 
         head = self
@@ -115,21 +117,27 @@ class Node:
             head = head.before
             temp = None
 
+
 class Book:
     def __init__(self, type, symbol, interval, price, amount, startDate):
 
         self.type = type
+        self.isSold = False
         self.symbol = symbol
         self.interval = interval
-        self.price = price
+        self.buyPrice = price
         self.amount = amount
         self.startDate = startDate
+        self.sellPrice = None
+        self.rate = None
+        self.total = price
+        self.endDate = None
 
 
 def history(symbol):
 
     klines = client.get_historical_klines(
-        symbol=symbol, interval=Client.KLINE_INTERVAL_4HOUR, start_str="27 jan 2021")
+        symbol=symbol, interval=Client.KLINE_INTERVAL_2HOUR, start_str="27 jan 2021")
 
     data = pd.DataFrame(klines)
 
@@ -149,7 +157,8 @@ def history(symbol):
     data['Low'] = pd.to_numeric(data['Low'])
     data['Volume'] = pd.to_numeric(data['Volume'])
     # data = data.drop(data.index[-1])
-    data['sumpv'] = ((data['Close'] + data['High'] + data['Low']) / 3) * data['Volume']
+    data['sumpv'] = ((data['Close'] + data['High'] +
+                     data['Low']) / 3) * data['Volume']
     data['sumv'] = data['Volume']
     data['vwap'] = float()
     data['index'] = 1
@@ -181,40 +190,67 @@ def history(symbol):
     for i in df[symbol].index:
 
         df[symbol].iloc[i, df[symbol].columns.get_loc('index')] = i + 1
-        
+
         vwap(i, symbol)
+
 
 def vwap(i, symbol):
     portion = df[symbol][:i+1]
 
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sumv')] = df[symbol].iloc[i, df[symbol].columns.get_loc('Volume')]
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sumpv')] = ((df[symbol].iloc[i, df[symbol].columns.get_loc('Close')] +df[symbol].iloc[i, df[symbol].columns.get_loc('High')]+df[symbol].iloc[i, df[symbol].columns.get_loc('Low')]) / 3) * df[symbol].iloc[i, df[symbol].columns.get_loc('Volume')]
-    df[symbol].iloc[i, df[symbol].columns.get_loc('hlc3')] = (df[symbol].iloc[i, df[symbol].columns.get_loc('Close')] +df[symbol].iloc[i, df[symbol].columns.get_loc('High')]+df[symbol].iloc[i, df[symbol].columns.get_loc('Low')]) / 3
+    df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'sumv')] = df[symbol].iloc[i, df[symbol].columns.get_loc('Volume')]
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sumpv')] = ((df[symbol].iloc[i, df[symbol].columns.get_loc('Close')] + df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'High')]+df[symbol].iloc[i, df[symbol].columns.get_loc('Low')]) / 3) * df[symbol].iloc[i, df[symbol].columns.get_loc('Volume')]
+    df[symbol].iloc[i, df[symbol].columns.get_loc('hlc3')] = (df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'Close')] + df[symbol].iloc[i, df[symbol].columns.get_loc('High')]+df[symbol].iloc[i, df[symbol].columns.get_loc('Low')]) / 3
 
-    df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] = np.round(portion['sumpv'].sum() / portion['sumv'].sum(), 2)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('psum')] = df[symbol].iloc[i - 1, df[symbol].columns.get_loc('psum')] + df[symbol].iloc[i, df[symbol].columns.get_loc('hlc3')]
-    df[symbol].iloc[i, df[symbol].columns.get_loc('mean')] = df[symbol].iloc[i, df[symbol].columns.get_loc('psum')] / df[symbol].iloc[i, df[symbol].columns.get_loc('index')]
-    df[symbol].iloc[i, df[symbol].columns.get_loc('v1')] = np.power(df[symbol].iloc[i, df[symbol].columns.get_loc('hlc3')] - df[symbol].iloc[i, df[symbol].columns.get_loc('mean')], 2) + df[symbol].iloc[i - 1, df[symbol].columns.get_loc('v1')]
-    df[symbol].iloc[i, df[symbol].columns.get_loc('varince')] = df[symbol].iloc[i, df[symbol].columns.get_loc('v1')] / (df[symbol].iloc[i, df[symbol].columns.get_loc('index')] - 1)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] = np.sqrt(df[symbol].iloc[i, df[symbol].columns.get_loc('varince')])
+    df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] = np.round(
+        portion['sumpv'].sum() / portion['sumv'].sum(), 2)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('psum')] = df[symbol].iloc[i - 1, df[symbol].columns.get_loc(
+        'psum')] + df[symbol].iloc[i, df[symbol].columns.get_loc('hlc3')]
+    df[symbol].iloc[i, df[symbol].columns.get_loc('mean')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'psum')] / df[symbol].iloc[i, df[symbol].columns.get_loc('index')]
+    df[symbol].iloc[i, df[symbol].columns.get_loc('v1')] = np.power(df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'hlc3')] - df[symbol].iloc[i, df[symbol].columns.get_loc('mean')], 2) + df[symbol].iloc[i - 1, df[symbol].columns.get_loc('v1')]
+    df[symbol].iloc[i, df[symbol].columns.get_loc('varince')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'v1')] / (df[symbol].iloc[i, df[symbol].columns.get_loc('index')] - 1)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] = np.sqrt(
+        df[symbol].iloc[i, df[symbol].columns.get_loc('varince')])
 
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd1_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult1)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd1_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult1)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd2_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult2)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd2_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult2)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd3_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult3)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd3_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult3)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd4_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult4)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd4_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult4)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd5_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult5)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd5_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult5)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd6_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult6)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd6_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult6)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd7_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult7)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd7_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult7)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd8_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult8)
-    df[symbol].iloc[i, df[symbol].columns.get_loc('sd8_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc('vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult8)
-    
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd1_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult1)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd1_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult1)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd2_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult2)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd2_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult2)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd3_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult3)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd3_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult3)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd4_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult4)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd4_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult4)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd5_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult5)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd5_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult5)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd6_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult6)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd6_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult6)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd7_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult7)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd7_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult7)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd8_pos')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] + (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult8)
+    df[symbol].iloc[i, df[symbol].columns.get_loc('sd8_neg')] = df[symbol].iloc[i, df[symbol].columns.get_loc(
+        'vwap')] - (df[symbol].iloc[i, df[symbol].columns.get_loc('dev')] * mult8)
+
+
 def updateLastRow(msg):
 
     close = pd.to_numeric(msg['k']['c'])
@@ -230,31 +266,61 @@ def updateLastRow(msg):
     df[symbol].iloc[-1, df[symbol].columns.get_loc('High')] = high
     df[symbol].iloc[-1, df[symbol].columns.get_loc('Open')] = open
     df[symbol].iloc[-1, df[symbol].columns.get_loc('Volume')] = volume
-    df[symbol].iloc[-1, df[symbol].columns.get_loc('Quote_Volume')] = quoteVolume
-
+    df[symbol].iloc[-1,
+                    df[symbol].columns.get_loc('Quote_Volume')] = quoteVolume
 
     copy = DataFrame(df[symbol].iloc[-1])
 
     copy.to_csv(f'vwap/'+symbol+'@vwap.csv', index=True)
+
+def printExcel():
+
+    excel = DataFrame(columns=['symbol', 'type', 'interval', 'amount',
+                      'startDate', 'endDate', 'buy', 'sell', 'growth/drop', 'total', 'closed'])
+
+    excel.to_csv(f'results/data@vwap.csv', index=True)
+
+    for i in exchange_pairs:
+        for j in orderList[i]:
+
+            msg = {
+                'symbol': j.symbol,
+                'type': j.type,
+                'interval': j.interval,
+                'amount': j.amount,
+                'startDate': j.startDate,
+                'endDate': j.endDate,
+                'buy': j.buyPRice,
+                'sell': j.sellPrice,
+                'growth/drop': j.rate,
+                'total': j.total,
+                'closed': j.isSold
+            }
+
+            excel.append(msg)
+
+    excel.to_csv(f'results/data@vwap.csv', index=True, mode='a')
 
 def updateFrame(msg):
 
     time = pd.to_datetime(msg['k']['t'], unit='ms')
     symbol = msg['k']['s']
     close = pd.to_numeric(msg['k']['c'])
+    open = pd.to_numeric(msg['k']['o'])
     check = np.where(df[symbol].iloc[-1]['Date'] == time, True, False)
 
     if check == True:
 
         updateLastRow(msg)
-        load_sr(symbol, close)
+        vwap(len(df[symbol]) - 1, symbol)
+        load_sr(symbol, open)
         checkTouch(symbol, close)
         sell(price=close, symbol=symbol, time=time)
-        vwap(len(df[symbol]) - 1, symbol)
+        buy(symbol)
+        printExcel()
 
     else:
         setBuy(symbol)
-        buy(symbol)
         df[symbol] = df[symbol].append({
             'Date': time,
             'Open': msg['k']['o'],
@@ -263,9 +329,10 @@ def updateFrame(msg):
             'Close': msg['k']['c'],
             'Volume': msg['k']['v'],
             'Quote_Volume': msg['k']['q'],
-           
+
         }, ignore_index=True)
     df[symbol].iloc[-1, df[symbol].columns.get_loc('index')] = len(df[symbol])
+
 
 def arrange(symbol):
 
@@ -292,8 +359,9 @@ def arrange(symbol):
     list.append(pd.to_numeric(frame['sd8_neg']))
 
     list = np.sort(list)
-    
+
     return list
+
 
 def load_sr(symbol, price):
 
@@ -304,7 +372,6 @@ def load_sr(symbol, price):
     if preOrder[symbol].isSet == False:
         preOrder[symbol].head.value = pd.to_numeric(price)
         preOrder[symbol].isSet = True
-
 
         for i in list:
 
@@ -324,110 +391,125 @@ def load_sr(symbol, price):
                 preOrder[symbol].head.pushAfter(node)
             else:
                 preOrder[symbol].head.pushBefore(node)
-    
+
+
 def init():
     for pair in exchange_pairs:
         preOrder[pair] = Order()
         orderList[pair] = []
 
+
 def checkTouch(symbol, price):
 
     try:
-        level = preOrder[symbol].head.next.value + (preOrder[symbol].head.next.value * 0.02)
+        level = preOrder[symbol].head.next.value + \
+            (preOrder[symbol].head.next.value * 0.02)
         if (preOrder[symbol].isBuy == True) and (price <= level):
             preOrder[symbol].isTouch = True
     except:
 
-        # print('Error caused by check touch... '+ str(symbol))
         print('')
-        
+
+
 def setBuy(symbol):
 
-    try:
+    # try:
 
         close = df[symbol].iloc[-1, df[symbol].columns.get_loc('Close')]
 
-        if preOrder[symbol].isBuy == True:
-            print('')
+        if close > preOrder[symbol].head.next.value and preOrder[symbol].isBuy != True:
 
-        elif close > preOrder[symbol].head.next.value:
             preOrder[symbol].isBuy = True
-            send_message(str(symbol) + ' cross vwap on ' + str(df[symbol].iloc[-1, df[symbol].columns.get_loc('Date')]))
+            send_message('--- Cross Vwap ---\nDate : ' + str(df[symbol].iloc[-1, df[symbol].columns.get_loc(
+                'Date')]) + '\nSymbol : ' + symbol + '\nPrice : ' + close + '\nNext Vwap : ' + preOrder[symbol].head.next.value + '\nBefore Vwap : '+ preOrder[symbol].head.before.value)
 
-        elif close < preOrder[symbol].head.before.value:
+        elif close < preOrder[symbol].head.before.value and preOrder[symbol].isBuy != True:
 
             preOrder[symbol].isBuy = False
             preOrder[symbol].isTouch = False
             preOrder[symbol].isSet = False
             preOrder[symbol].isOrder = False
 
-            send_message('Reset ' + str(symbol) + ' at ' + str(close) + ' on ' + str(df[symbol].iloc[-1, df[symbol].columns.get_loc('Date')]))
+    # except:
+    #     print('Error caused by set buy... ' + str(symbol))
 
-    except:
-        print('Error caused by set buy... '+ str(symbol))
-
-# def stopLose(symbol):
 
 def buy(symbol):
-    
-    try:
+
+    # try:
         close = df[symbol].iloc[-1, df[symbol].columns.get_loc('Close')]
         date = str(df[symbol].iloc[-1, df[symbol].columns.get_loc('Date')])
 
-        if preOrder[symbol].isOrder == True:
-            print('')
+        if preOrder[symbol].isOrder != True:
 
-        elif preOrder[symbol].isBuy == True and preOrder[symbol].isTouch == True and close >= preOrder[symbol].head.next.value:
+            if preOrder[symbol].isBuy == True and preOrder[symbol].isTouch == True and close >= preOrder[symbol].head.next.value:
 
-            send_message('Buy ' + str(symbol) + ' at ' + str(close) + ' on ' + date)
-            preOrder[symbol].isOrder = True
-            orderList[symbol].append(Book(type='vwap', symbol=symbol, interval='2h', amount=500.0, price=close, startDate=date))
+                send_message('--- Buy ---\nDate : ' + str(date) +
+                             '\nSymbol : ' + symbol + '\nPrice : ' + close)
+
+                preOrder[symbol].isOrder = True
+                orderList[symbol].append(Book(
+                    type='vwap', symbol=symbol, interval='2h', amount=500.0, buyPrice=close, startDate=date))
+
+            elif preOrder[symbol].isBuy == True and preOrder[symbol].isTouch == True and close < preOrder[symbol].head.next.value:
+
+                preOrder[symbol].isBuy = False
+                preOrder[symbol].isTouch = False
+                preOrder[symbol].isSet = False
+                preOrder[symbol].isOrder = False
+
+    # except:
+
+    #     print('Error caused by buy... ' + str(symbol))
 
 
-        elif preOrder[symbol].isBuy == True and preOrder[symbol].isTouch == True and close < preOrder[symbol].head.next.value:
-
-            preOrder[symbol].isBuy = False
-            preOrder[symbol].isTouch = False
-            preOrder[symbol].isSet = False
-            preOrder[symbol].isOrder = False
-
-            send_message('Reset ' + str(symbol) + ' at ' + str(close) + ' on ' + str(date))
-
-
-    except:
-
-        print('Error caused by buy... ' + str(symbol))
-            
 def sell(symbol, price, time):
 
-    try:    
+    try:
 
         for el in orderList[symbol]:
 
             rate = ((price - el.price) / el.price) * 100
 
-            if rate >= 5.0:
-                send_message('sell ' + str(symbol) + ' at ' + str(price) + ' at ' + str(el.startDate)+ ' on ' + str(time) + ' with profit ' + str(rate) + '%')
-                orderList[symbol].pop(el)
+            if el.isSold == False:
+
+                el.sellPrice = price
+                el.endDate = time
+                el.rate = rate
+                el.total += el.buyPrice * el.rate
+
+                if rate >= 5.0:
+
+                    el.isSold = True
+                    send_message('--- Sell ---\n' + 'Symbol : ' + str(symbol) + '\nBuy Date : ' + el.startDate + '\nSell Date : '+str(
+                        time) + '\nBuy Price : ' + str(el.price) + '\nSell Price : ' + str(price) + '\nProfit ' + str(rate) + '%')
+
+                elif rate <= -5.0:
+
+                    el.isSold = True
+                    send_message('--- Stoplose ---\n' + 'Symbol : ' + str(symbol) + '\nBuy Date : ' + el.startDate + '\nSell Date : '+str(
+                        time) + '\nBuy Price : ' + str(el.price) + '\nSell Price : ' + str(price) + '\nDrop ' + str(rate) + '%')
 
     except:
 
-        print('Error caused by selling... '+ str(symbol))
-        
+        print('Error caused by selling... ' + str(symbol))
+
+
 def handle_socket_message(msg):
 
     # 1 - load prev orders.
     # 2 - load pairs SR and set them.
 
     updateFrame(msg)
-        
-def realtime(msg):
-        if 'data' in msg:
-            # Your code
-            handle_socket_message(msg['data'])
 
-        else:
-            stream.stream_error = True
+
+def realtime(msg):
+    if 'data' in msg:
+        # Your code
+        handle_socket_message(msg['data'])
+
+    else:
+        stream.stream_error = True
 
 
 init()
@@ -439,25 +521,26 @@ print('Done...')
 print('Start streaming...')
 
 
-
 class Stream():
-        
+
     def start(self):
-        self.bm = ThreadedWebsocketManager()
+        self.bm = ThreadedWebsocketManager(
+            api_key=API_KEY, api_secret=API_SECRET)
         self.bm.start()
         self.stream_error = False
         self.multiplex_list = list()
-            
+
         # listOfPairings: all pairs with USDT (over 250 items in list)
         for pairing in exchange_pairs:
-            self.multiplex_list.append(pairing.lower() + '@kline_4h')
-        self.multiplex = self.bm.start_multiplex_socket(callback = realtime, streams = self.multiplex_list)
-        
+            self.multiplex_list.append(pairing.lower() + '@kline_2h')
+        self.multiplex = self.bm.start_multiplex_socket(
+            callback=realtime, streams=self.multiplex_list)
+
         # monitoring the error
-        stop_trades = threading.Thread(target = stream.restart_stream, daemon = True)
+        stop_trades = threading.Thread(
+            target=stream.restart_stream, daemon=True)
         stop_trades.start()
-        
-        
+
     def restart_stream(self):
         while True:
             time.sleep(1)
@@ -465,7 +548,9 @@ class Stream():
                 self.bm.stop_socket(self.multiplex)
                 time.sleep(5)
                 self.stream_error = False
-                self.multiplex = self.bm.start_multiplex_socket(callback = realtime, streams = self.multiplex_list)
+                self.multiplex = self.bm.start_multiplex_socket(
+                    callback=realtime, streams=self.multiplex_list)
+
 
 stream = Stream()
 stream.start()
