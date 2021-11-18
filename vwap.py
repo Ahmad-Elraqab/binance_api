@@ -119,18 +119,18 @@ class Node:
 
 
 class Book:
-    def __init__(self, type, symbol, interval, price, amount, startDate):
+    def __init__(self, type, symbol, interval, buyPrice, amount, startDate):
 
         self.type = type
         self.isSold = False
         self.symbol = symbol
         self.interval = interval
-        self.buyPrice = price
+        self.buyPrice = buyPrice
         self.amount = amount
         self.startDate = startDate
         self.sellPrice = None
         self.rate = None
-        self.total = price
+        self.total = buyPrice
         self.endDate = None
 
 
@@ -273,6 +273,7 @@ def updateLastRow(msg):
 
     copy.to_csv(f'vwap/'+symbol+'@vwap.csv', index=True)
 
+
 def printExcel():
 
     excel = DataFrame(columns=['symbol', 'type', 'interval', 'amount',
@@ -290,16 +291,17 @@ def printExcel():
                 'amount': j.amount,
                 'startDate': j.startDate,
                 'endDate': j.endDate,
-                'buy': j.buyPRice,
+                'buy': j.buyPrice,
                 'sell': j.sellPrice,
                 'growth/drop': j.rate,
                 'total': j.total,
                 'closed': j.isSold
             }
 
-            excel.append(msg)
+            excel.append(msg, ignore_index=True)
 
     excel.to_csv(f'results/data@vwap.csv', index=True, mode='a')
+
 
 def updateFrame(msg):
 
@@ -334,63 +336,81 @@ def updateFrame(msg):
     df[symbol].iloc[-1, df[symbol].columns.get_loc('index')] = len(df[symbol])
 
 
-def arrange(symbol):
+def arrange(symbol, price):
 
-    list = []
+    upper = []
+    lower = []
 
     frame = df[symbol].iloc[-1]
 
-    list.append(pd.to_numeric(frame['vwap']))
-    list.append(pd.to_numeric(frame['sd1_pos']))
-    list.append(pd.to_numeric(frame['sd1_neg']))
-    list.append(pd.to_numeric(frame['sd2_pos']))
-    list.append(pd.to_numeric(frame['sd2_neg']))
-    list.append(pd.to_numeric(frame['sd3_pos']))
-    list.append(pd.to_numeric(frame['sd3_neg']))
-    list.append(pd.to_numeric(frame['sd4_pos']))
-    list.append(pd.to_numeric(frame['sd4_neg']))
-    list.append(pd.to_numeric(frame['sd5_pos']))
-    list.append(pd.to_numeric(frame['sd5_neg']))
-    list.append(pd.to_numeric(frame['sd6_pos']))
-    list.append(pd.to_numeric(frame['sd6_neg']))
-    list.append(pd.to_numeric(frame['sd7_pos']))
-    list.append(pd.to_numeric(frame['sd7_neg']))
-    list.append(pd.to_numeric(frame['sd8_pos']))
-    list.append(pd.to_numeric(frame['sd8_neg']))
+    upper.append(pd.to_numeric(frame['vwap'])) if price < pd.to_numeric(
+        frame['vwap']) else lower.append(pd.to_numeric(frame['vwap']))
+    upper.append(pd.to_numeric(frame['sd1_pos'])) if price < pd.to_numeric(
+        frame['sd1_pos']) else lower.append(pd.to_numeric(frame['sd1_pos']))
+    upper.append(pd.to_numeric(frame['sd1_neg'])) if price < pd.to_numeric(
+        frame['sd1_neg']) else lower.append(pd.to_numeric(frame['sd1_neg']))
+    upper.append(pd.to_numeric(frame['sd2_pos'])) if price < pd.to_numeric(
+        frame['sd2_pos']) else lower.append(pd.to_numeric(frame['sd2_pos']))
+    upper.append(pd.to_numeric(frame['sd2_neg'])) if price < pd.to_numeric(
+        frame['sd2_neg']) else lower.append(pd.to_numeric(frame['sd2_neg']))
+    upper.append(pd.to_numeric(frame['sd3_pos'])) if price < pd.to_numeric(
+        frame['sd3_pos']) else lower.append(pd.to_numeric(frame['sd3_pos']))
+    upper.append(pd.to_numeric(frame['sd3_neg'])) if price < pd.to_numeric(
+        frame['sd3_neg']) else lower.append(pd.to_numeric(frame['sd3_neg']))
+    upper.append(pd.to_numeric(frame['sd4_pos'])) if price < pd.to_numeric(
+        frame['sd4_pos']) else lower.append(pd.to_numeric(frame['sd4_pos']))
+    upper.append(pd.to_numeric(frame['sd4_neg'])) if price < pd.to_numeric(
+        frame['sd4_neg']) else lower.append(pd.to_numeric(frame['sd4_neg']))
+    upper.append(pd.to_numeric(frame['sd5_pos'])) if price < pd.to_numeric(
+        frame['sd5_pos']) else lower.append(pd.to_numeric(frame['sd5_pos']))
+    upper.append(pd.to_numeric(frame['sd5_neg'])) if price < pd.to_numeric(
+        frame['sd5_neg']) else lower.append(pd.to_numeric(frame['sd5_neg']))
+    upper.append(pd.to_numeric(frame['sd6_pos'])) if price < pd.to_numeric(
+        frame['sd6_pos']) else lower.append(pd.to_numeric(frame['sd6_pos']))
+    upper.append(pd.to_numeric(frame['sd6_neg'])) if price < pd.to_numeric(
+        frame['sd6_neg']) else lower.append(pd.to_numeric(frame['sd6_neg']))
+    upper.append(pd.to_numeric(frame['sd7_pos'])) if price < pd.to_numeric(
+        frame['sd7_pos']) else lower.append(pd.to_numeric(frame['sd7_pos']))
+    upper.append(pd.to_numeric(frame['sd7_neg'])) if price < pd.to_numeric(
+        frame['sd7_neg']) else lower.append(pd.to_numeric(frame['sd7_neg']))
+    upper.append(pd.to_numeric(frame['sd8_pos'])) if price < pd.to_numeric(
+        frame['sd8_pos']) else lower.append(pd.to_numeric(frame['sd8_pos']))
+    upper.append(pd.to_numeric(frame['sd8_neg'])) if price < pd.to_numeric(
+        frame['sd8_neg']) else lower.append(pd.to_numeric(frame['sd8_neg']))
 
-    list = np.sort(list)
+    upper = np.sort(upper)
+    lower = np.sort(lower)
+    lower = lower[::-1]
 
-    return list
+    return upper, lower
 
 
 def load_sr(symbol, price):
 
-    list = arrange(symbol)
-    preOrder[symbol].head.deleteAllNextNodes()
-    preOrder[symbol].head.deleteAllBeforeNodes()
+    try:
+        if preOrder[symbol].isSet == False:
 
-    if preOrder[symbol].isSet == False:
-        preOrder[symbol].head.value = pd.to_numeric(price)
-        preOrder[symbol].isSet = True
+            upper, lower = arrange(symbol, price)
 
-        for i in list:
+            preOrder[symbol].head.value = pd.to_numeric(price)
 
-            node = Node(value=i)
+            preOrder[symbol].isSet = True
 
-            if i > pd.to_numeric(price):
-                preOrder[symbol].head.pushAfter(node)
-            else:
-                preOrder[symbol].head.pushBefore(node)
-    else:
+            preOrder[symbol].head.next = Node(value=upper[0])
+            preOrder[symbol].head.before = Node(value=lower[0])
 
-        for i in list:
+        else:
 
-            node = Node(value=i)
+            upper, lower = arrange(symbol, preOrder[symbol].head.value)
 
-            if i > preOrder[symbol].head.value:
-                preOrder[symbol].head.pushAfter(node)
-            else:
-                preOrder[symbol].head.pushBefore(node)
+            preOrder[symbol].head.next = Node(value=upper[0])
+            preOrder[symbol].head.before = Node(value=lower[0])
+
+    except Exception as e:
+
+        print('error while loading ' + symbol)
+
+        print(e)
 
 
 def init():
@@ -413,7 +433,7 @@ def checkTouch(symbol, price):
 
 def setBuy(symbol):
 
-    # try:
+    try:
 
         close = df[symbol].iloc[-1, df[symbol].columns.get_loc('Close')]
 
@@ -421,7 +441,7 @@ def setBuy(symbol):
 
             preOrder[symbol].isBuy = True
             send_message('--- Cross Vwap ---\nDate : ' + str(df[symbol].iloc[-1, df[symbol].columns.get_loc(
-                'Date')]) + '\nSymbol : ' + symbol + '\nPrice : ' + close + '\nNext Vwap : ' + preOrder[symbol].head.next.value + '\nBefore Vwap : '+ preOrder[symbol].head.before.value)
+                'Date')]) + '\nSymbol : ' + str(symbol) + '\nPrice : ' + str(close) + '\nNext Vwap : ' + str(preOrder[symbol].head.next.value) + '\nBefore Vwap : ' + str(preOrder[symbol].head.before.value))
 
         elif close < preOrder[symbol].head.before.value and preOrder[symbol].isBuy != True:
 
@@ -430,33 +450,34 @@ def setBuy(symbol):
             preOrder[symbol].isSet = False
             preOrder[symbol].isOrder = False
 
-    # except:
-    #     print('Error caused by set buy... ' + str(symbol))
+    except Exception as e:
+        print(e)
+        print('Error caused by set buy... ' + str(symbol))
 
 
 def buy(symbol):
 
     # try:
-        close = df[symbol].iloc[-1, df[symbol].columns.get_loc('Close')]
-        date = str(df[symbol].iloc[-1, df[symbol].columns.get_loc('Date')])
+    close = df[symbol].iloc[-1, df[symbol].columns.get_loc('Close')]
+    date = str(df[symbol].iloc[-1, df[symbol].columns.get_loc('Date')])
 
-        if preOrder[symbol].isOrder != True:
+    if preOrder[symbol].isOrder != True:
 
-            if preOrder[symbol].isBuy == True and preOrder[symbol].isTouch == True and close >= preOrder[symbol].head.next.value:
+        if preOrder[symbol].isBuy == True and preOrder[symbol].isTouch == True and close >= preOrder[symbol].head.next.value:
 
-                send_message('--- Buy ---\nDate : ' + str(date) +
-                             '\nSymbol : ' + symbol + '\nPrice : ' + close)
+            send_message('--- Buy ---\nDate : ' + str(date) +
+                         '\nSymbol : ' + str(symbol) + '\nPrice : ' + str(close))
 
-                preOrder[symbol].isOrder = True
-                orderList[symbol].append(Book(
-                    type='vwap', symbol=symbol, interval='2h', amount=500.0, buyPrice=close, startDate=date))
+            preOrder[symbol].isOrder = True
+            orderList[symbol].append(Book(
+                type='vwap', symbol=symbol, interval='2h', amount=500.0, buyPrice=close, startDate=date))
 
-            elif preOrder[symbol].isBuy == True and preOrder[symbol].isTouch == True and close < preOrder[symbol].head.next.value:
+        elif preOrder[symbol].isBuy == True and preOrder[symbol].isTouch == True and close < preOrder[symbol].head.next.value:
 
-                preOrder[symbol].isBuy = False
-                preOrder[symbol].isTouch = False
-                preOrder[symbol].isSet = False
-                preOrder[symbol].isOrder = False
+            preOrder[symbol].isBuy = False
+            preOrder[symbol].isTouch = False
+            preOrder[symbol].isSet = False
+            preOrder[symbol].isOrder = False
 
     # except:
 
@@ -469,7 +490,7 @@ def sell(symbol, price, time):
 
         for el in orderList[symbol]:
 
-            rate = ((price - el.price) / el.price) * 100
+            rate = ((price - el.buyPrice) / el.buyPrice) * 100
 
             if el.isSold == False:
 
@@ -481,18 +502,19 @@ def sell(symbol, price, time):
                 if rate >= 5.0:
 
                     el.isSold = True
-                    send_message('--- Sell ---\n' + 'Symbol : ' + str(symbol) + '\nBuy Date : ' + el.startDate + '\nSell Date : '+str(
-                        time) + '\nBuy Price : ' + str(el.price) + '\nSell Price : ' + str(price) + '\nProfit ' + str(rate) + '%')
+                    send_message('--- Sell ---\n' + 'Symbol : ' + str(symbol) + '\nBuy Date : ' + str(el.startDate) + '\nSell Date : '+str(
+                        time) + '\nBuy Price : ' + str(el.buyPrice) + '\nSell Price : ' + str(price) + '\nProfit ' + str(rate) + '%')
 
                 elif rate <= -5.0:
 
                     el.isSold = True
-                    send_message('--- Stoplose ---\n' + 'Symbol : ' + str(symbol) + '\nBuy Date : ' + el.startDate + '\nSell Date : '+str(
-                        time) + '\nBuy Price : ' + str(el.price) + '\nSell Price : ' + str(price) + '\nDrop ' + str(rate) + '%')
+                    send_message('--- Stoplose ---\n' + 'Symbol : ' + str(symbol) + '\nBuy Date : ' + str(el.startDate) + '\nSell Date : '+str(
+                        time) + '\nBuy Price : ' + str(el.buyPrice) + '\nSell Price : ' + str(price) + '\nDrop ' + str(rate) + '%')
 
-    except:
+    except Exception as e:
 
         print('Error caused by selling... ' + str(symbol))
+        print(e)
 
 
 def handle_socket_message(msg):
