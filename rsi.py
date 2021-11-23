@@ -68,8 +68,11 @@ def setDatafFame(symbol):
     kilne_tracker[symbol]['Close'] = pd.to_numeric(
         kilne_tracker[symbol]['Close'])
 
-    # kilne_tracker[symbol].to_csv(
-    #     f'zscore/'+symbol+'@data.csv', index=False, header=True)
+    kilne_tracker[symbol]['rsi_14'] = get_rsi(
+        kilne_tracker[symbol]['Close'], 14)
+
+    kilne_tracker[symbol].to_csv(
+        f'rsi/'+symbol+'@data.csv', index=False, header=True)
 
 
 def readHistory():
@@ -107,7 +110,37 @@ def readHistory():
             print(i + ' caused error')
 
     print('Done.')
-    print('Start Streaming.....')
+    print('Start Streaming ---- RSI ----.')
+
+
+def get_rsi(close, lookback):
+    ret = close.diff()
+    up = []
+    down = []
+    for i in range(len(ret)):
+        if ret[i] < 0:
+            up.append(0)
+            down.append(ret[i])
+        else:
+            up.append(ret[i])
+            down.append(0)
+
+    up_series = pd.Series(up)
+    down_series = pd.Series(down).abs()
+
+    up_ewm = up_series.ewm(com=lookback - 1, adjust=False).mean()
+    down_ewm = down_series.ewm(com=lookback - 1, adjust=False).mean()
+
+    rs = up_ewm/down_ewm
+
+    rsi = 100 - (100 / (1 + rs))
+
+    rsi_df = pd.DataFrame(rsi).rename(
+        columns={0: 'rsi'}).set_index(close.index)
+
+    rsi_df = rsi_df.dropna()
+
+    return rsi_df[3:]
 
 
 def checkDrop(rate, order, price, time):
@@ -117,10 +150,10 @@ def checkDrop(rate, order, price, time):
         order.isSold = True
         ordersList[order.symbol]['isBuy'] = True
 
-        message = '--- 48 zscore ---\n' + 'Order: run away\n' + 'Symbol: ' + \
+        message = '--- RSI ---\n' + 'Order: run away\n' + 'Symbol: ' + \
             str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nFrom: ' + \
-            str(order.startDate) + '\nTo: ' + str(time) + '\nSupport price: ' + str(price) + '\ngrowth/drop: ' + str(rate) + '\nZscore: ' + \
-            str(kilne_tracker[order.symbol].iloc[-1]['48-zscore'])
+            str(order.startDate) + '\nTo: ' + str(time) + '\nSupport price: ' + str(price) + '\ngrowth/drop: ' + str(rate) + '\nRSI: ' + \
+            str(kilne_tracker[order.symbol].iloc[-1]['rsi_14'])
 
         send_message(message)
 
@@ -131,10 +164,10 @@ def checkDrop(rate, order, price, time):
         order.buyPrice = (order.total) / order.drop_count
         # order.sellPrice = order.buyPrice + (order.buyPrice * 0.05)
 
-        message = '--- 48 zscore ---\n' + 'Order: support ' + str(order.drop_count - 1) + '\nSymbol: ' + \
+        message = '--- RSI ---\n' + 'Order: support ' + str(order.drop_count - 1) + '\nSymbol: ' + \
             str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nFrom: ' + \
-            str(order.startDate) + '\nTo: ' + str(time) + '\nSupport price: ' + str(price) + '\ngrowth/drop: ' + str(rate) + '\nZscore: ' + \
-            str(kilne_tracker[order.symbol].iloc[-1]['48-zscore'])
+            str(order.startDate) + '\nTo: ' + str(time) + '\nSupport price: ' + str(price) + '\ngrowth/drop: ' + str(rate) + '\nRSI: ' + \
+            str(kilne_tracker[order.symbol].iloc[-1]['rsi_14'])
 
         send_message(message)
 
@@ -142,7 +175,7 @@ def checkDrop(rate, order, price, time):
         order.sellPrice = price
         order.endDate = time
         order.rate = rate
-        order.sellZscore = kilne_tracker[order.symbol].iloc[-1]['48-zscore']
+        order.sellZscore = kilne_tracker[order.symbol].iloc[-1]['rsi_14']
 
 
 def sell(s, time, price):
@@ -160,8 +193,8 @@ def sell(s, time, price):
                 rate = ((float(price) - float(i.buyPrice)) /
                         float(i.buyPrice)) * 100
 
-                # if kilne_tracker[symbol].iloc[-1]['48-zscore'] >= 2.6 and i.buyPrice <= p:
-                if rate >= 2.0:
+                if kilne_tracker[symbol].iloc[-1]['rsi_14'] >= 70.0 and i.buyPrice <= p:
+                    # if rate >= 2.0:
 
                     i.isSold = True
                     ordersList[symbol]['isBuy'] = True
@@ -169,7 +202,7 @@ def sell(s, time, price):
                     i.sellPrice = price
                     i.endDate = time
                     i.rate = rate
-                    i.sellZscore = kilne_tracker[symbol].iloc[-1]['48-zscore']
+                    i.sellZscore = kilne_tracker[symbol].iloc[-1]['rsi_14']
 
                     excel_df.loc[excel_df['id'] == i.id, 'sell'] = i.sellPrice
                     excel_df.loc[excel_df['id'] == i.id, 'endDate'] = i.endDate
@@ -181,14 +214,14 @@ def sell(s, time, price):
                     excel_df.loc[excel_df['id'] ==
                                  i.id, 'growth/drop'] = i.rate
 
-                    excel_df.to_csv(f'results/data@zscore-15m.csv')
+                    excel_df.to_csv(f'results/data@RSI-15M.csv')
 
-                    message = '--- 48 zscore ---\n' + 'Id: ' + str(i.id) + '\nOrder: Sell\n' + 'Symbol: ' + \
+                    message = '--- RSI ---\n' + 'Id: ' + str(i.id) + '\nOrder: Sell\n' + 'Symbol: ' + \
                         str(i.symbol) + '\nInterval: ' + str(i.interval)+'\nBuy price: ' + \
                         str(i.buyPrice) + '\nSell price: '+str(kilne_tracker[symbol].iloc[-1]['Close'])+'\nFrom: ' + \
-                        str(i.startDate) + '\nTo: ' + str(time) + '\ngrowth/drop: ' + str(rate) + '\nDrop count: ' + str(i.drop_count - 1) + '\nSell zscore: ' + \
-                        str(kilne_tracker[symbol].iloc[-1]['48-zscore']
-                            ) + '\nBuy zscore: ' + str(i.buyZscore)
+                        str(i.startDate) + '\nTo: ' + str(time) + '\ngrowth/drop: ' + str(rate) + '\nDrop count: ' + str(i.drop_count - 1) + '\nSell RSI: ' + \
+                        str(kilne_tracker[symbol].iloc[-1]['rsi_14']
+                            ) + '\nBuy RSI: ' + str(i.buyZscore)
 
                     send_message(message)
 
@@ -206,7 +239,7 @@ def sell(s, time, price):
                     excel_df.loc[excel_df['id'] ==
                                  i.id, 'growth/drop'] = i.rate
 
-                    excel_df.to_csv(f'results/data@zscore-15m.csv')
+                    excel_df.to_csv(f'results/data@RSI-15M.csv')
 
     except Exception as e:
         print(e)
@@ -214,6 +247,8 @@ def sell(s, time, price):
 
 def buy(symbol, time):
 
+    rsi = kilne_tracker[symbol].iloc[-1,
+                                     kilne_tracker[symbol].columns.get_loc('rsi_14')]
     zscore = kilne_tracker[symbol].iloc[-1,
                                         kilne_tracker[symbol].columns.get_loc('48-zscore')]
     zscore_484 = kilne_tracker[symbol].iloc[-1,
@@ -221,22 +256,22 @@ def buy(symbol, time):
     zscore_200 = kilne_tracker[symbol].iloc[-1,
                                             kilne_tracker[symbol].columns.get_loc('200-zscore')]
 
-    if (zscore <= -2.5 and ordersList[symbol]['isBuy'] == False and zscore_484 > -1 and zscore_200 > -1) or zscore <= -4.0:
+    if rsi <= 30.0 and ordersList[symbol]['isBuy'] == False:
 
         ordersList[symbol]['isBuy'] = True
         ordersList
         order = Order(
             id=uuid.uuid1(),
-            type='zscore',
+            type='rsi',
             symbol=symbol,
-            interval='15m',
+            interval='15M',
             buyPrice=kilne_tracker[symbol].iloc[-1]['Close'],
             sellPrice=kilne_tracker[symbol].iloc[-1]['Close'] +
             (kilne_tracker[symbol].iloc[-1]['Close'] * 0.05),
             amount=500,
             startDate=time,
             dropRate=5,
-            buyZscore=zscore
+            buyZscore=rsi
         )
         ordersList[symbol]['list'].append(order)
 
@@ -260,12 +295,12 @@ def buy(symbol, time):
         global excel_df
         excel_df = excel_df.append(msg, ignore_index=True)
 
-        excel_df.to_csv(f'results/data@zscore-15m.csv', header=False)
+        excel_df.to_csv(f'results/data@RSI-15M.csv', header=False)
 
-        message = '--- 48 zscore  ---\n' + 'Id: ' + str(order.id) + '\nOrder: Buy\n' + 'Symbol: ' + \
+        message = '--- RSI ---\n' + 'Id: ' + str(order.id) + '\nOrder: Buy\n' + 'Symbol: ' + \
             str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nBuy price: ' + \
             str(order.buyPrice) + '\nFrom: ' + \
-            str(order.startDate) + '\nZscore: ' + str(zscore)
+            str(order.startDate) + '\nRSI: ' + str(rsi)
         send_message(message)
 
 

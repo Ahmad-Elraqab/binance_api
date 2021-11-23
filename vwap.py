@@ -2,6 +2,7 @@ from os import close
 import datetime
 import threading
 import time
+import uuid
 
 from pandas.core.frame import DataFrame
 from client import send_message
@@ -21,6 +22,8 @@ df = {}
 orderList = {}
 preOrder = {}
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
+excel_df = DataFrame(columns=['id', 'symbol', 'type', 'interval', 'amount',
+                              'startDate', 'endDate', 'buy', 'sell', 'growth/drop', 'total', 'closed'])
 
 mult1 = 0.500
 mult2 = 1.000
@@ -37,6 +40,8 @@ class Order:
         self.id = 'id'
         self.isSet = False
         self.isTouch = False
+        self.isHit = False
+        self.hitPrice = None
         self.isBuy = False
         self.isOrder = False
         self.goal1 = None
@@ -119,8 +124,9 @@ class Node:
 
 
 class Book:
-    def __init__(self, type, symbol, interval, buyPrice, amount, startDate):
+    def __init__(self, id, type, symbol, interval, buyPrice, amount, startDate):
 
+        self.id = id
         self.type = type
         self.isSold = False
         self.symbol = symbol
@@ -397,6 +403,7 @@ def load_sr(symbol, price):
             preOrder[symbol].isSet = True
 
             preOrder[symbol].head.next = Node(value=upper[0])
+            preOrder[symbol].head.next.next = Node(value=upper[1])
             preOrder[symbol].head.before = Node(value=lower[0])
 
         else:
@@ -404,6 +411,7 @@ def load_sr(symbol, price):
             upper, lower = arrange(symbol, preOrder[symbol].head.value)
 
             preOrder[symbol].head.next = Node(value=upper[0])
+            preOrder[symbol].head.next.next = Node(value=upper[1])
             preOrder[symbol].head.before = Node(value=lower[0])
 
     except Exception as e:
@@ -465,12 +473,29 @@ def buy(symbol):
 
         if preOrder[symbol].isBuy == True and preOrder[symbol].isTouch == True and close >= preOrder[symbol].head.next.value:
 
-            send_message('--- Buy ---\nDate : ' + str(date) +
+            send_message('--- buy vwap ---\nDate : ' + str(date) +
                          '\nSymbol : ' + str(symbol) + '\nPrice : ' + str(close))
 
             preOrder[symbol].isOrder = True
-            orderList[symbol].append(Book(
-                type='vwap', symbol=symbol, interval='2h', amount=500.0, buyPrice=close, startDate=date))
+            order = Book(id=uuid.uuid1(),
+                         type='vwap', symbol=symbol, interval='2h', amount=500.0, buyPrice=close, startDate=date)
+            orderList[symbol].append(order)
+            msg = {
+                'id': order.id,
+                'symbol': order.symbol,
+                'type': order.type,
+                'interval': order.interval,
+                'amount': order.amount,
+                'startDate': order.startDate,
+                'endDate': order.endDate,
+                'buy': order.buyPrice,
+                'sell': order.sellPrice,
+                'total': order.total,
+                'closed': order.isSold,
+                'growth/drop': order.rate,
+            }
+            global excel_df
+            excel_df = excel_df.append(msg, ignore_index=True)
 
         elif preOrder[symbol].isBuy == True and preOrder[symbol].isTouch == True and close < preOrder[symbol].head.next.value:
 
@@ -499,18 +524,47 @@ def sell(symbol, price, time):
                 el.rate = rate
                 el.total += el.buyPrice * el.rate
 
-                if rate >= 5.0:
+                if price >= preOrder[symbol].head.next.next.value and preOrder[symbol].isHit == False:
 
+                    preOrder[symbol].isHit = True
+                    preOrder[symbol].hitPrice = price
+
+                elif rate <= -5.0 and preOrder[symbol].isHit == False:
+
+                    preOrder[symbol].isBuy = False
+                    preOrder[symbol].isTouch = False
+                    preOrder[symbol].isSet = False
+                    preOrder[symbol].isOrder = False
                     el.isSold = True
-                    send_message('--- Sell ---\n' + 'Symbol : ' + str(symbol) + '\nBuy Date : ' + str(el.startDate) + '\nSell Date : '+str(
-                        time) + '\nBuy Price : ' + str(el.buyPrice) + '\nSell Price : ' + str(price) + '\nProfit ' + str(rate) + '%')
-
-                elif rate <= -5.0:
-
-                    el.isSold = True
-                    send_message('--- Stoplose ---\n' + 'Symbol : ' + str(symbol) + '\nBuy Date : ' + str(el.startDate) + '\nSell Date : '+str(
+                    send_message('--- stoplose vwap ---\n' + 'Symbol : ' + str(symbol) + '\nBuy Date : ' + str(el.startDate) + '\nSell Date : '+str(
                         time) + '\nBuy Price : ' + str(el.buyPrice) + '\nSell Price : ' + str(price) + '\nDrop ' + str(rate) + '%')
 
+                elif preOrder[symbol].isHit == False:
+
+                    new_rate = (
+                        (price - preOrder[symbol].isHit) / preOrder[symbol].isHit) * 100
+
+                    if new_rate <= -1.0:
+
+                        preOrder[symbol].isHit = False
+                        preOrder[symbol].isBuy = False
+                        preOrder[symbol].isTouch = False
+                        preOrder[symbol].isSet = False
+                        preOrder[symbol].isOrder = False
+                        el.isSold = True
+                        send_message('--- sell vwap ---\n' + 'Symbol : ' + str(symbol) + '\nBuy Date : ' + str(el.startDate) + '\nSell Date : '+str(
+                            time) + '\nBuy Price : ' + str(el.buyPrice) + '\nSell Price : ' + str(price) + '\nProfit ' + str(rate) + '%')
+
+                    elif new_rate >= 5:
+
+                        preOrder[symbol].hitPrice = price
+
+                excel_df.loc[excel_df['id'] == el.id, 'sell'] = el.sellPrice
+                excel_df.loc[excel_df['id'] == el.id, 'endDate'] = el.endDate
+                excel_df.loc[excel_df['id'] == el.id, 'growth/drop'] = el.rate
+
+                excel_df.to_csv(f'results/data@vwap.csv')
+                
     except Exception as e:
 
         print('Error caused by selling... ' + str(symbol))
