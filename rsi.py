@@ -19,10 +19,10 @@ kilne_tracker = {}
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
 excel_df = DataFrame(columns=['id', 'symbol', 'type', 'interval', 'amount',
                               'startDate', 'endDate', 'buy', 'sell', 'growth/drop', 'drop_count', 'total', 'closed', 'buy_zscore', 'sell_zscore'])
-FILE_NAME = 'RSI-15M-1'
-INTERVAL = '15m'
-DESC = ' 12h range'
-H_HISTORY = Client.KLINE_INTERVAL_15MINUTE
+FILE_NAME = 'RSI-1M-8'
+INTERVAL = '1m'
+DESC = ' 30m range'
+H_HISTORY = Client.KLINE_INTERVAL_1MINUTE
 
 
 class Order:
@@ -163,7 +163,8 @@ def checkSell(rate, order, price, time):
 
         send_message(message)
 
-    if (kilne_tracker[order.symbol].iloc[-1]['rsi_14'] >= 70.0 and order.buyPrice <= price) or (hours >= 720.0):
+    # if (kilne_tracker[order.symbol].iloc[-1]['rsi_14'] >= 70.0 and order.buyPrice <= price) or (hours >= 30.0):
+    if (rate >= 1.00) or (hours >= 30.0):
 
         order.isSold = True
         ordersList[order.symbol]['isBuy'] = False
