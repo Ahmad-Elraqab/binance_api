@@ -1,0 +1,2 @@
+,id,symbol,type,interval,amount,startDate,endDate,buy,sell,growth/drop,drop_count,total,closed,buy_zscore,sell_zscore
+0,35b39545-5a97-11ec-aa57-f4d1080d95a2,TFUELUSDT,rsi,1m 1h range,500,2021-12-11 15:30:00,2021-12-11 15:57:00,0.2293,0.2316,1.0030527692978615,1,0.2293,True,28.564343327178378,73.00208770632806

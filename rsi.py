@@ -1,3 +1,4 @@
+from datetime import datetime
 from os import close
 import threading
 import time
@@ -15,14 +16,21 @@ import matplotlib.pyplot as plt
 import uuid
 
 ordersList = {}
+money = 0
 kilne_tracker = {}
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
 excel_df = DataFrame(columns=['id', 'symbol', 'type', 'interval', 'amount',
                               'startDate', 'endDate', 'buy', 'sell', 'growth/drop', 'drop_count', 'total', 'closed', 'buy_zscore', 'sell_zscore'])
-FILE_NAME = 'RSI-1M-8'
+FILE_NAME = 'RSI-1M-7'
 INTERVAL = '1m'
-DESC = ' 30m range'
+DESC = ' 1h range'
 H_HISTORY = Client.KLINE_INTERVAL_1MINUTE
+
+
+f1 = open(f'stream/BTCUSDT/data@BTCUSDT#15m.csv', "r")
+last_line = f1.readlines()[-1]
+test = last_line.strip().split(',')
+# print(test[-2])
 
 
 class Order:
@@ -67,7 +75,7 @@ def readHistory():
         try:
 
             klines = client.get_historical_klines(
-                symbol=i, interval=H_HISTORY, start_str="2 hours ago")
+                symbol=i, interval=H_HISTORY, start_str="1 hours ago")
 
             data = pd.DataFrame(klines)
 
@@ -83,6 +91,9 @@ def readHistory():
             data['Close'] = pd.to_numeric(
                 data['Close'], errors='coerce')
             data['rsi_14'] = get_rsi(data['Close'], 14)
+
+            data['isBuy'] = True
+            data['stopLoseDate'] = None
 
             kilne_tracker[i] = data
 
@@ -128,6 +139,7 @@ def get_rsi(close, lookback):
 
 def checkSell(rate, order, price, time):
 
+    global money
     order.sellPrice = price
     order.endDate = time
     order.rate = rate
@@ -137,10 +149,15 @@ def checkSell(rate, order, price, time):
     total_seconds = difference.total_seconds()
     hours = divmod(total_seconds, 60)[0]
 
-    if rate <= -7 and order.drop_count == 3:
+    # if rate <= -3 and order.drop_count == 3:
+    if rate <= -3:
 
         order.isSold = True
+        value = order.amount * (rate / 100)
+        money += value
         ordersList[order.symbol]['isBuy'] = False
+        ordersList[order.symbol]['isShut'] = True
+        ordersList[order.symbol]['date'] = datetime.now()
 
         message = '--- RSI ---\n' + 'Order: run away\n' + 'Symbol: ' + \
             str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nFrom: ' + \
@@ -149,24 +166,26 @@ def checkSell(rate, order, price, time):
 
         send_message(message)
 
-    elif rate <= -3 and order.drop_count < 3:
+    # elif rate <= -3 and order.drop_count < 3:
 
-        order.drop_count += 1
-        order.total += float(price)
-        order.buyPrice = (order.total) / order.drop_count
+    #     order.drop_count += 1
+    #     order.total += float(price)
+    #     order.buyPrice = (order.total) / order.drop_count
         # order.sellPrice = order.buyPrice + (order.buyPrice * 0.05)
 
-        message = '--- RSI ---\n' + 'Order: support ' + str(order.drop_count - 1) + '\nSymbol: ' + \
-            str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nFrom: ' + \
-            str(order.startDate) + '\nTo: ' + str(time) + '\nSupport price: ' + str(price) + '\ngrowth/drop: ' + str(rate) + '\nRSI: ' + \
-            str(kilne_tracker[order.symbol].iloc[-1]['rsi_14'])
+        # message = '--- RSI ---\n' + 'Order: support ' + str(order.drop_count - 1) + '\nSymbol: ' + \
+        #     str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nFrom: ' + \
+        #     str(order.startDate) + '\nTo: ' + str(time) + '\nSupport price: ' + str(price) + '\ngrowth/drop: ' + str(rate) + '\nRSI: ' + \
+        #     str(kilne_tracker[order.symbol].iloc[-1]['rsi_14'])
 
-        send_message(message)
+        # send_message(message)
 
     # if (kilne_tracker[order.symbol].iloc[-1]['rsi_14'] >= 70.0 and order.buyPrice <= price) or (hours >= 30.0):
-    if (rate >= 1.00) or (hours >= 30.0):
+    elif (rate >= 1.00) or (hours >= 90.0):
 
         order.isSold = True
+        value = order.amount * (rate / 100)
+        money += value
         ordersList[order.symbol]['isBuy'] = False
 
         message = '--- RSI ---\n' + 'Id: ' + str(order.id) + '\nOrder: Sell\n' + 'Symbol: ' + \
@@ -204,6 +223,7 @@ def sell(s, time, price):
 
                 checkSell(rate, i, p, time)
 
+        print(money)
     except Exception as e:
         print(e)
 
@@ -215,7 +235,14 @@ def buy(symbol, time):
 
     list = [x for x in ordersList['list'] if x.isSold == False]
 
-    if rsi <= 30.0 and ordersList[symbol]['isBuy'] == False and len(list) < 20:
+    if ordersList[symbol]['isShut'] == True:
+        diff = time - ordersList[symbol]['date']
+        total_seconds = diff.total_seconds()
+        hours = divmod(total_seconds, 3600)[0]
+        if hours >= 6:
+            ordersList[symbol]['isShut'] = False
+
+    if rsi <= 30.0 and ordersList[symbol]['isBuy'] == False and len(list) < 20 and ordersList[symbol]['isShut'] == False and float(test[-2]) > 0.0:
 
         ordersList[symbol]['isBuy'] = True
         ordersList
@@ -268,6 +295,7 @@ def init():
         ordersList[pair] = {}
         ordersList['list'] = []
         ordersList[pair]['isBuy'] = False
+        ordersList[pair]['isShut'] = False
 
 
 def realtime(msg):
@@ -282,47 +310,53 @@ def realtime(msg):
 
 def updateFrame(symbol, msg):
 
-    # try:
-    time = pd.to_datetime(msg['k']['t'], unit='ms')
-    symbol = msg['s']
+    try:
+        time = pd.to_datetime(msg['k']['t'], unit='ms')
+        symbol = msg['s']
 
-    check = np.where(
-        kilne_tracker[symbol].iloc[-1]['Date'] == time, True, False)
+        check = np.where(
+            kilne_tracker[symbol].iloc[-1]['Date'] == time, True, False)
 
-    if check == True:
+        if check == True:
 
-        kilne_tracker[symbol].iloc[-1,
-                                   kilne_tracker[symbol].columns.get_loc('Open')] = float(msg['k']['o'])
-        kilne_tracker[symbol].iloc[-1,
-                                   kilne_tracker[symbol].columns.get_loc('High')] = float(msg['k']['h'])
-        kilne_tracker[symbol].iloc[-1,
-                                   kilne_tracker[symbol].columns.get_loc('Low')] = float(msg['k']['l'])
-        kilne_tracker[symbol].iloc[-1,
-                                   kilne_tracker[symbol].columns.get_loc('Close')] = float(msg['k']['c'])
-        kilne_tracker[symbol].iloc[-1,
-                                   kilne_tracker[symbol].columns.get_loc('Volume')] = float(msg['k']['v'])
-        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol]
-                                   .columns.get_loc('Quote_Volume')] = float(msg['k']['q'])
+            kilne_tracker[symbol].iloc[-1,
+                                       kilne_tracker[symbol].columns.get_loc('Open')] = float(msg['k']['o'])
+            kilne_tracker[symbol].iloc[-1,
+                                       kilne_tracker[symbol].columns.get_loc('High')] = float(msg['k']['h'])
+            kilne_tracker[symbol].iloc[-1,
+                                       kilne_tracker[symbol].columns.get_loc('Low')] = float(msg['k']['l'])
+            kilne_tracker[symbol].iloc[-1,
+                                       kilne_tracker[symbol].columns.get_loc('Close')] = float(msg['k']['c'])
+            kilne_tracker[symbol].iloc[-1,
+                                       kilne_tracker[symbol].columns.get_loc('Volume')] = float(msg['k']['v'])
+            kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol]
+                                       .columns.get_loc('Quote_Volume')] = float(msg['k']['q'])
 
-    else:
+        else:
 
-        buy(symbol, time)
+            buy(symbol, time)
 
-        kilne_tracker[symbol] = kilne_tracker[symbol].append({
-            'Date': time,
-            'Open': msg['k']['o'],
-            'High': msg['k']['h'],
-            'Low': msg['k']['l'],
-            'Close': msg['k']['c'],
-            'Volume': msg['k']['v'],
-            'Quote_Volume': msg['k']['q'],
-        }, ignore_index=True)
+            kilne_tracker[symbol] = kilne_tracker[symbol].append({
+                'Date': time,
+                'Open': msg['k']['o'],
+                'High': msg['k']['h'],
+                'Low': msg['k']['l'],
+                'Close': msg['k']['c'],
+                'Volume': msg['k']['v'],
+                'Quote_Volume': msg['k']['q'],
+            }, ignore_index=True)
 
-    setDatafFame(symbol=symbol)
+            global test
+            f1 = open(f'stream/BTCUSDT/data@BTCUSDT#15m.csv', "r")
+            last_line = f1.readlines()[-1]
+            test = last_line.strip().split(',')
+        # print(test[-2])
+        setDatafFame(symbol=symbol)
 
-    # except:
+    except Exception as e:
 
-    #     print('Error while updating data...')
+        print(e)
+        print('Error while updating data...')
 
 
 def handle_socket(msg):

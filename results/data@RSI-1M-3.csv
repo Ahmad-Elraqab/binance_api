@@ -1,0 +1,2 @@
+,id,symbol,type,interval,amount,startDate,endDate,buy,sell,growth/drop,drop_count,total,closed,buy_zscore,sell_zscore
+0,479e60ae-5a9a-11ec-b2b5-f4d1080d95a2,USDTIDRT,rsi,1m 1h range,500,2021-12-11 15:52:00,2021-12-11 16:11:00,14445.0,14441.0,-0.027691242644513673,1,14445.0,False,27.518336536068873,47.44585801314254
