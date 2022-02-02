@@ -14,24 +14,41 @@ from client import send_message
 import pandas as pd
 import matplotlib.pyplot as plt
 import uuid
+import concurrent.futures
+import csv
 
+mydict = {}
 ordersList = {}
 money = 0
 kilne_tracker = {}
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
 excel_df = DataFrame(columns=['id', 'symbol', 'type', 'interval', 'amount',
-                              'startDate', 'endDate', 'buy', 'sell', 'growth/drop', 'drop_count', 'total', 'closed', 'buy_zscore', 'sell_zscore'])
-FILE_NAME = 'RSI-1M-7'
+                              'startDate', 'endVate', 'buy', 'sell', 'growth/drop', 'drop_count', 'total', 'closed', 'buy_zscore', 'sell_zscore'])
+
+
+FILE_NAME = 'RSI-1M-RSI-22'
 INTERVAL = '1m'
-DESC = ' 1h range'
+DESC = ' 1M range'
 H_HISTORY = Client.KLINE_INTERVAL_1MINUTE
 
 
-f1 = open(f'stream/BTCUSDT/data@BTCUSDT#15m.csv', "r")
-last_line = f1.readlines()[-1]
-test = last_line.strip().split(',')
-# print(test[-2])
+mydict = None
 
+
+def readFile():
+    try:
+        global mydict
+
+        with open(f'results/db.csv', mode='r') as infile:
+            reader = csv.reader(infile)
+            # with open('coors_new.csv', mode='w') as outfile:
+            # writer = csv.writer(outfile)
+            mydict = {rows[1]: {'status': rows[2], 'vwap': rows[3]}
+                    for rows in reader}
+    except Exception as e:
+
+        # print(mydict)
+        print(e)
 
 class Order:
     def __init__(self, id, type, symbol, interval, buyPrice, sellPrice, amount, startDate, dropRate, buyZscore):
@@ -52,6 +69,8 @@ class Order:
         self.isSold = False
         self.sellZscore = None
         self.buyZscore = buyZscore
+        self.isHold = False
+        self.hold = buyPrice
 
 
 def setDatafFame(symbol):
@@ -66,42 +85,40 @@ def setDatafFame(symbol):
     #     f'rsi/'+symbol+'@data.csv', index=False, header=True)
 
 
-def readHistory():
-    print('start reading history of ' +
-          str(len(exchange_pairs)) + ' USDT pairs...')
+def readHistory(i):
 
-    for i in exchange_pairs:
+    print('start reading history of ' + str(i) + ' USDT pairs...')
 
-        try:
+    try:
 
-            klines = client.get_historical_klines(
-                symbol=i, interval=H_HISTORY, start_str="1 hours ago")
+        klines = client.get_historical_klines(
+            symbol=i, interval=H_HISTORY, start_str="1 hours ago")
 
-            data = pd.DataFrame(klines)
+        data = pd.DataFrame(klines)
 
-            data[0] = pd.to_datetime(data[0], unit='ms')
+        data[0] = pd.to_datetime(data[0], unit='ms')
 
-            data.columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'IGNORE', 'Quote_Volume',
-                            'Trades_Count', 'BUY_VOL', 'BUY_VOL_VAL', 'x']
+        data.columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'IGNORE', 'Quote_Volume',
+                        'Trades_Count', 'BUY_VOL', 'BUY_VOL_VAL', 'x']
 
-            data = data.drop(columns=['IGNORE',
-                                      'Trades_Count', 'BUY_VOL', 'BUY_VOL_VAL', 'x'])
+        data = data.drop(columns=['IGNORE',
+                                  'Trades_Count', 'BUY_VOL', 'BUY_VOL_VAL', 'x'])
 
-            # data = data.set_index('Date')
-            data['Close'] = pd.to_numeric(
-                data['Close'], errors='coerce')
-            data['rsi_14'] = get_rsi(data['Close'], 14)
+        # data = data.set_index('Date')
+        data['Close'] = pd.to_numeric(
+            data['Close'], errors='coerce')
+        data['rsi_14'] = get_rsi(data['Close'], 14)
 
-            data['isBuy'] = True
-            data['stopLoseDate'] = None
+        data['isBuy'] = True
+        data['stopLoseDate'] = None
 
-            kilne_tracker[i] = data
+        kilne_tracker[i] = data
 
-            print(i + ' is loaded...')
+        print(i + ' is loaded...')
 
-        except:
+    except:
 
-            print(i + ' caused error')
+        print(i + ' caused error')
 
     print('Done.')
     print('Start Streaming ---- RSI ----.')
@@ -137,7 +154,7 @@ def get_rsi(close, lookback):
     return rsi_df[3:]
 
 
-def checkSell(rate, order, price, time):
+def checkSell(holdrate, rate, order, price, time):
 
     global money
     order.sellPrice = price
@@ -149,7 +166,6 @@ def checkSell(rate, order, price, time):
     total_seconds = difference.total_seconds()
     hours = divmod(total_seconds, 60)[0]
 
-    # if rate <= -3 and order.drop_count == 3:
     if rate <= -3:
 
         order.isSold = True
@@ -165,37 +181,24 @@ def checkSell(rate, order, price, time):
             str(kilne_tracker[order.symbol].iloc[-1]['rsi_14'])
 
         send_message(message)
+        print(money)
 
-    # elif rate <= -3 and order.drop_count < 3:
-
-    #     order.drop_count += 1
-    #     order.total += float(price)
-    #     order.buyPrice = (order.total) / order.drop_count
-        # order.sellPrice = order.buyPrice + (order.buyPrice * 0.05)
-
-        # message = '--- RSI ---\n' + 'Order: support ' + str(order.drop_count - 1) + '\nSymbol: ' + \
-        #     str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nFrom: ' + \
-        #     str(order.startDate) + '\nTo: ' + str(time) + '\nSupport price: ' + str(price) + '\ngrowth/drop: ' + str(rate) + '\nRSI: ' + \
-        #     str(kilne_tracker[order.symbol].iloc[-1]['rsi_14'])
-
-        # send_message(message)
-
-    # if (kilne_tracker[order.symbol].iloc[-1]['rsi_14'] >= 70.0 and order.buyPrice <= price) or (hours >= 30.0):
-    elif (rate >= 1.00) or (hours >= 90.0):
+    elif order.sellZscore >= 70.0:
 
         order.isSold = True
         value = order.amount * (rate / 100)
         money += value
         ordersList[order.symbol]['isBuy'] = False
+        ordersList[order.symbol]['isShut'] = True
+        ordersList[order.symbol]['date'] = datetime.now()
 
-        message = '--- RSI ---\n' + 'Id: ' + str(order.id) + '\nOrder: Sell\n' + 'Symbol: ' + \
-            str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nBuy price: ' + \
-            str(order.buyPrice) + '\nSell price: '+str(kilne_tracker[order.symbol].iloc[-1]['Close'])+'\nFrom: ' + \
-            str(order.startDate) + '\nTo: ' + str(time) + '\ngrowth/drop: ' + str(rate) + '\nDrop count: ' + str(order.drop_count - 1) + '\nSell RSI: ' + \
-            str(kilne_tracker[order.symbol].iloc[-1]['rsi_14']
-                ) + '\nBuy RSI: ' + str(order.buyZscore)
+        message = '--- RSI ---\n' + 'Order: Sell\n' + 'Symbol: ' + \
+            str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nFrom: ' + \
+            str(order.startDate) + '\nTo: ' + str(time) + '\nSupport price: ' + str(price) + '\ngrowth/drop: ' + str(rate) + '\nRSI: ' + \
+            str(kilne_tracker[order.symbol].iloc[-1]['rsi_14'])
 
         send_message(message)
+        print(money)
 
     excel_df.loc[excel_df['id'] == order.id, 'sell'] = order.sellPrice
     excel_df.loc[excel_df['id'] == order.id, 'endDate'] = order.endDate
@@ -220,80 +223,91 @@ def sell(s, time, price):
 
                 rate = ((float(price) - float(i.buyPrice)) /
                         float(i.buyPrice)) * 100
+                holdrate = ((float(price) - float(i.buyPrice)) /
+                            float(i.buyPrice)) * 100
 
-                checkSell(rate, i, p, time)
+                checkSell(holdrate, rate, i, p, time)
 
-        print(money)
+        # print(money)
     except Exception as e:
         print(e)
 
 
 def buy(symbol, time):
 
-    rsi = kilne_tracker[symbol].iloc[-1,
-                                     kilne_tracker[symbol].columns.get_loc('rsi_14')]
+    try:
 
-    list = [x for x in ordersList['list'] if x.isSold == False]
+        rsi = kilne_tracker[symbol].iloc[-1,
+                                         kilne_tracker[symbol].columns.get_loc('rsi_14')]
 
-    if ordersList[symbol]['isShut'] == True:
-        diff = time - ordersList[symbol]['date']
-        total_seconds = diff.total_seconds()
-        hours = divmod(total_seconds, 3600)[0]
-        if hours >= 6:
-            ordersList[symbol]['isShut'] = False
+        status = mydict[symbol]['status']
+        vwap = pd.to_numeric(mydict[symbol]['vwap'])
 
-    if rsi <= 30.0 and ordersList[symbol]['isBuy'] == False and len(list) < 20 and ordersList[symbol]['isShut'] == False and float(test[-2]) > 0.0:
+        list = [x for x in ordersList['list'] if x.isSold == False]
 
-        ordersList[symbol]['isBuy'] = True
-        ordersList
-        order = Order(
-            id=uuid.uuid1(),
-            type='rsi',
-            symbol=symbol,
-            interval=INTERVAL + DESC,
-            buyPrice=kilne_tracker[symbol].iloc[-1]['Close'],
-            sellPrice=kilne_tracker[symbol].iloc[-1]['Close'] +
-            (kilne_tracker[symbol].iloc[-1]['Close'] * 0.05),
-            amount=500,
-            startDate=time,
-            dropRate=5,
-            buyZscore=rsi
-        )
-        ordersList['list'].append(order)
+        if ordersList[symbol]['isShut'] == True:
+            diff = time - ordersList[symbol]['date']
+            total_seconds = diff.total_seconds()
+            hours = divmod(total_seconds, 3600)[0]
+            if hours >= 6:
+                ordersList[symbol]['isShut'] = False
 
-        msg = {
-            'id': order.id,
-            'symbol': order.symbol,
-            'type': order.type,
-            'interval': order.interval,
-            'amount': order.amount,
-            'startDate': order.startDate,
-            'endDate': order.endDate,
-            'buy': order.buyPrice,
-            'sell': order.sellPrice,
-            'drop_count': order.drop_count,
-            'total': order.total,
-            'closed': order.isSold,
-            'growth/drop': order.rate,
-            'buy_zscore': order.buyZscore,
-            'sell_zscore': order.sellZscore
-        }
-        global excel_df
-        excel_df = excel_df.append(msg, ignore_index=True)
+        if rsi <= 30.0 and ordersList[symbol]['isBuy'] == False and len(list) < 20 and ordersList[symbol]['isShut'] == False and status == 'True':
+            print(vwap)
+            print(status)
 
-        excel_df.to_csv(f'results/data@'+FILE_NAME+'.csv', header=False)
+            ordersList[symbol]['isBuy'] = True
+            ordersList
+            order = Order(
+                id=uuid.uuid1(),
+                type='rsi',
+                symbol=symbol,
+                interval=INTERVAL + DESC,
+                buyPrice=kilne_tracker[symbol].iloc[-1]['Close'],
+                sellPrice=kilne_tracker[symbol].iloc[-1]['Close'] +
+                (kilne_tracker[symbol].iloc[-1]['Close'] * 0.05),
+                amount=500,
+                startDate=time,
+                dropRate=5,
+                buyZscore=rsi
+            )
+            ordersList['list'].append(order)
 
-        message = '--- RSI ---\n' + 'Id: ' + str(order.id) + '\nOrder: Buy\n' + 'Symbol: ' + \
-            str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nBuy price: ' + \
-            str(order.buyPrice) + '\nFrom: ' + \
-            str(order.startDate) + '\nRSI: ' + str(rsi)
-        send_message(message)
+            msg = {
+                'id': order.id,
+                'symbol': order.symbol,
+                'type': order.type,
+                'interval': order.interval,
+                'amount': order.amount,
+                'startDate': order.startDate,
+                'endDate': order.endDate,
+                'buy': order.buyPrice,
+                'sell': order.sellPrice,
+                'drop_count': order.drop_count,
+                'total': order.total,
+                'closed': order.isSold,
+                'growth/drop': order.rate,
+                'buy_zscore': order.buyZscore,
+                'sell_zscore': order.sellZscore
+            }
+            global excel_df
+            excel_df = excel_df.append(msg, ignore_index=True)
+
+            excel_df.to_csv(f'results/data@'+FILE_NAME+'.csv', header=False)
+
+            message = '--- RSI POS NEG ---\n' + 'Id: ' + str(order.id) + '\nOrder: Buy\n' + 'Symbol: ' + \
+                str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nBuy price: ' + \
+                str(order.buyPrice) + '\nFrom: ' + \
+                str(order.startDate) + '\nRSI: ' + str(rsi)
+            send_message(message)
+    except:
+        pass
 
 
 def init():
+    ordersList['list'] = []
     for pair in exchange_pairs:
         ordersList[pair] = {}
-        ordersList['list'] = []
         ordersList[pair]['isBuy'] = False
         ordersList[pair]['isShut'] = False
 
@@ -311,6 +325,9 @@ def realtime(msg):
 def updateFrame(symbol, msg):
 
     try:
+
+        readFile()
+
         time = pd.to_datetime(msg['k']['t'], unit='ms')
         symbol = msg['s']
 
@@ -335,7 +352,6 @@ def updateFrame(symbol, msg):
         else:
 
             buy(symbol, time)
-
             kilne_tracker[symbol] = kilne_tracker[symbol].append({
                 'Date': time,
                 'Open': msg['k']['o'],
@@ -346,11 +362,6 @@ def updateFrame(symbol, msg):
                 'Quote_Volume': msg['k']['q'],
             }, ignore_index=True)
 
-            global test
-            f1 = open(f'stream/BTCUSDT/data@BTCUSDT#15m.csv', "r")
-            last_line = f1.readlines()[-1]
-            test = last_line.strip().split(',')
-        # print(test[-2])
         setDatafFame(symbol=symbol)
 
     except Exception as e:
@@ -372,7 +383,13 @@ def handle_socket(msg):
 
 init()
 
-readHistory()
+t1 = time.perf_counter()
+
+with concurrent.futures.ThreadPoolExecutor() as executor:
+
+    executor.map(readHistory, exchange_pairs)
+
+t2 = time.perf_counter()
 
 
 class Stream():
@@ -406,6 +423,10 @@ class Stream():
                     callback=realtime, streams=self.multiplex_list)
 
 
+readFile()
+
 stream = Stream()
+
 stream.start()
+
 stream.bm.join()

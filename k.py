@@ -13,11 +13,11 @@ import os
 import errno
 import concurrent.futures
 
-FILE_NAME = 'RSI-1M-Direct-Max'
+FILE_NAME = 'RSI-1M-'
 kilne_tracker = {}
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
 excel_df = DataFrame(columns=['id', 'symbol', 'type', 'interval', 'amount',
-                              'startDate', 'endDate', 'buy', 'sell', 'growth/drop', 'drop_count', 'total', 'closed', 'buy_zscore', 'sell_zscore'])
+                              'startDate', 'endVate', 'buy', 'sell', 'growth/drop', 'drop_count', 'total', 'closed', 'buy_zscore', 'sell_zscore'])
 ordersList = {}
 
 INTERVAL = '15m'
@@ -25,10 +25,7 @@ H_HISTORY = Client.KLINE_INTERVAL_15MINUTE
 PART = '-'
 temp = False
 tempTime = None
-c_df = pd.DataFrame(columns=['s', 'status', 'price', 'buy'])
-
-avg_df = pd.DataFrame(columns=['s', 'AVG'])
-
+c_df = pd.DataFrame(columns=['s', 'status', 'vwap'])
 
 class Order:
     def __init__(self, id, type, symbol, interval, buyPrice, sellPrice, amount, startDate, dropRate, buyZscore):
@@ -51,8 +48,6 @@ class Order:
         self.buyZscore = buyZscore
         self.isHold = False
         self.hold = buyPrice
-        self.high = 0
-        self.low = 0
 
 
 def readHistory(i):
@@ -81,11 +76,8 @@ def readHistory(i):
     data['DIF_48'] = 0
     data['DIF_84'] = 0
 
-    try:
-        c_df = c_df.append(
-            {'s': i, 'status': False, 'price': data.iloc[-1, 4], 'buy': False}, ignore_index=True)
-    except Exception as e:
-        print(e)
+    c_df = c_df.append(
+        {'s': i, 'status': False, 'vwap': 0}, ignore_index=True)
 
     kilne_tracker[i] = data
 
@@ -106,10 +98,9 @@ def calcVWAP(symbol, msg, inte):
     kilne_tracker[symbol]['DIF_' + str(inte)] = value1 / value2
 
 
-def checkCross(symbol, msg):
+def checkCross(symbol, msg, time):
 
     try:
-        check = c_df.loc[c_df['s'] == symbol, 'status'][0]
         vwap20 = kilne_tracker[symbol].iloc[-1,
                                             kilne_tracker[symbol].columns.get_loc('DIF_20')]
         vwap48 = kilne_tracker[symbol].iloc[-1,
@@ -117,141 +108,25 @@ def checkCross(symbol, msg):
         vwap84 = kilne_tracker[symbol].iloc[-1,
                                             kilne_tracker[symbol].columns.get_loc('DIF_84')]
 
-        if vwap20 >= vwap48 and vwap48 >= vwap84 and check == False:
+        check = c_df.loc[c_df['s'] == symbol]
 
-            c_df.loc[c_df['s'] == symbol,
-                     'price'] = pd.to_numeric(msg['k']['c'])
+        price = pd.to_numeric(msg['k']['c'])
+        if vwap20 >= vwap48 and vwap48 >= vwap84 and check.iloc[0]['status'] == False:
+
+            # c_df.loc[c_df['s'] == symbol,
+            #          'price'] = price
             c_df.loc[c_df['s'] == symbol, 'status'] = True
 
+        c_df.loc[c_df['s'] == symbol, 'vwap'] = (price - vwap48) / price * 100
+
+
     except:
-        # print('.')
-        pass
-
-
-def buy(symbol, time):
-
-    try:
-        check = c_df.loc[c_df['s'] == symbol, 'status'][0]
-        check_buy = c_df.loc[c_df['s'] == symbol, 'buy'][0]
-
-        if check == True and check_buy == False:
-
-            c_df.loc[c_df['s'] == symbol, 'buy'] = True
-
-            order = Order(
-                id=uuid.uuid1(),
-                type='rsi',
-                symbol=symbol,
-                interval=INTERVAL,
-                buyPrice=kilne_tracker[symbol].iloc[-1]['Close'],
-                sellPrice=kilne_tracker[symbol].iloc[-1]['Close'] +
-                (kilne_tracker[symbol].iloc[-1]['Close'] * 0.05),
-                amount=500,
-                startDate=time,
-                dropRate=5,
-                buyZscore=None
-            )
-            ordersList.append(order)
-
-            msg = {
-                'id': order.id,
-                'symbol': order.symbol,
-                'type': order.type,
-                'interval': order.interval,
-                'amount': order.amount,
-                'startDate': order.startDate,
-                'endDate': order.endDate,
-                'buy': order.buyPrice,
-                'sell': order.sellPrice,
-                'drop_count': order.drop_count,
-                'total': order.total,
-                'closed': order.isSold,
-                'growth/drop': order.rate,
-                'buy_zscore': order.buyZscore,
-                'sell_zscore': order.sellZscore
-            }
-            global excel_df
-            excel_df = excel_df.append(msg, ignore_index=True)
-
-            excel_df.to_csv(f'results/data@'+FILE_NAME+'.csv', header=False)
-
-            message = '--- RSI ---\n' + 'Id: ' + str(order.id) + '\nOrder: Buy\n' + 'Symbol: ' + \
-                str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nBuy price: ' + \
-                str(order.buyPrice) + '\nFrom: ' + \
-                str(order.startDate)
-
-            send_message(message)
-    except Exception as s:
-
-        # print('error buy ' + str(symbol))
-        # print(s)
-        pass
-
-
-def checkSell(rate, order, price, time):
-
-    vwap20 = kilne_tracker[order.symbol].iloc[-1,
-                                              kilne_tracker[order.symbol].columns.get_loc('DIF_20')]
-    vwap48 = kilne_tracker[order.symbol].iloc[-1,
-                                              kilne_tracker[order.symbol].columns.get_loc('DIF_48')]
-
-    order.sellPrice = price
-    order.endDate = time
-    order.rate = rate
-    order.sellZscore = kilne_tracker[order.symbol].iloc[-1]['rsi_14']
-
-    # difference = (order.endDate - order.startDate)
-    # total_seconds = difference.total_seconds()
-    # hours = divmod(total_seconds, 60)[0]
-
-    if vwap20 < vwap48:
-
-        c_df.loc[c_df['s'] == order.symbol, 'status'] = False
-        c_df.loc[c_df['s'] == order.symbol, 'buy'] = False
-
-        order.isSold = True
-        ordersList[order.symbol]['date'] = datetime.now()
-
-        message = '--- RSI ---\n' + 'Order: Sell\n' + 'Symbol: ' + \
-            str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nFrom: ' + \
-            str(order.startDate) + '\nTo: ' + str(time) + '\nSupport price: ' + str(price) + '\ngrowth/drop: ' + str(rate) + '\nRSI: ' + \
-            str(kilne_tracker[order.symbol].iloc[-1]['rsi_14'])
-
-        send_message(message)
-
-    excel_df.loc[excel_df['id'] == order.id, 'sell'] = order.sellPrice
-    excel_df.loc[excel_df['id'] == order.id, 'endDate'] = order.endDate
-    excel_df.loc[excel_df['id'] == order.id, 'closed'] = order.isSold
-    excel_df.loc[excel_df['id'] == order.id, 'buy'] = order.buyPrice
-    excel_df.loc[excel_df['id'] == order.id, 'drop_count'] = order.drop_count
-    excel_df.loc[excel_df['id'] == order.id, 'sell_zscore'] = order.sellZscore
-    excel_df.loc[excel_df['id'] == order.id, 'growth/drop'] = order.rate
-
-    excel_df.to_csv(f'results/data@'+FILE_NAME+'.csv')
-
-
-def sell(s, time, price):
-
-    list = ordersList
-    p = float(price)
-
-    try:
-        for i in list:
-
-            if i.isSold == False and i.symbol == s:
-
-                rate = ((float(price) - float(i.buyPrice)) /
-                        float(i.buyPrice)) * 100
-
-                checkSell(rate, i, p, time)
-
-    except Exception as e:
-        # print(e)
         pass
 
 
 def updateFrame(symbol, msg):
 
+    # print(msg)
     time = pd.to_datetime(msg['k']['t'], unit='ms')
     symbol = msg['s']
 
@@ -282,14 +157,15 @@ def updateFrame(symbol, msg):
             'Volume': msg['k']['v'],
             'Quote_Volume': msg['k']['q'],
         }, ignore_index=True)
+        c_df.to_csv(f'results/db.csv', header=False)
 
     calcVWAP(symbol=symbol, msg=msg, inte=20)
     calcVWAP(symbol=symbol, msg=msg, inte=48)
     calcVWAP(symbol=symbol, msg=msg, inte=84)
 
-    checkCross(symbol, msg)
-    buy(symbol, time)
-    sell(symbol, time, msg['k']['c'])
+    checkCross(symbol, msg, time)
+    # kilne_tracker[symbol].to_csv(
+    #     f'stream/'+symbol+'/data@'+symbol+'#'+INTERVAL+PART+'.csv')
 
 
 def handle_socket(msg):
@@ -343,6 +219,15 @@ class Stream():
 
 send_message('NEW')
 
+
+def init():
+    ordersList['list'] = []
+    for pair in exchange_pairs:
+        ordersList[pair] = {}
+
+
+init()
+
 t1 = time.perf_counter()
 
 with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -354,8 +239,9 @@ t2 = time.perf_counter()
 print(f'Finished in {t2 - t1} seconds')
 
 stream = Stream()
-
-print(f'Start Streaming....')
+# time.sleep(5)
 
 stream.start()
 stream.bm.join()
+
+

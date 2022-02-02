@@ -18,7 +18,7 @@ exchange_info = client.get_exchange_info()
 for s in exchange_info['symbols']:
     if 'DOWN' in s['symbol'] or 'UP' in s['symbol']:
         print('Future')
-    elif 'USDT' in s['symbol']:
+    elif 'BTC' in s['symbol']:
 
         print(s['symbol'])
         # exchange_pairs[s['symbol']] = {'rate': 1.5}
