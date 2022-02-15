@@ -13,12 +13,12 @@ import os
 import errno
 import concurrent.futures
 
-FILE_NAME = 'RSI-15M-2%'
+FILE_NAME = 'RSI-15M-stream-v-v-5'
 coin_list = {}
 kilne_tracker = {}
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
 excel_df = DataFrame(columns=['id', 'symbol', 'type', 'interval', 'amount',
-                              'startDate', 'endDate', 'buy', 'sell', 'growth/drop', 'closed', 'high', 'low', 'Volume', 'RSI'])
+                              'startDate', 'endDate', 'buy', 'sell', 'growth/drop', 'closed', 'high', 'low', 'Volume', 'RSI', 'BTC', 'coin', 'V-BTC', 'V-B', 'V-C', 'status'])
 ordersList = {}
 
 INTERVAL = '15m'
@@ -29,7 +29,7 @@ tempTime = None
 
 
 class Order:
-    def __init__(self, id, type, symbol, interval, buyPrice, sellPrice, amount, startDate, volume, rsi):
+    def __init__(self, id, type, symbol, interval, buyPrice, sellPrice, amount, startDate, volume, rsi, status):
 
         self.id = id
         self.type = type
@@ -48,6 +48,7 @@ class Order:
         self.low = buyPrice
         self.volume = volume
         self.rsi = rsi
+        self.status = status
 
 
 def readHistory(i):
@@ -88,6 +89,8 @@ def readHistory(i):
 
 
 def get_rsi(close, lookback):
+
+    close = pd.to_numeric(close)
     ret = close.diff()
     up = []
     down = []
@@ -152,12 +155,15 @@ def checkTouch(symbol):
     length = len(kilne_tracker[symbol])-1
 
     if pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) <= pd.to_numeric(vwap20) and status == False and vwap20 > vwap48 and vwap48 > vwap84:
+    # if status == False and vwap20 > vwap48 and vwap48 > vwap84:
 
         coin_list[symbol]['status'] = True
 
-    elif pd.to_numeric(vwap20) <= pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) and set_buy == False and status == True:
+    # elif pd.to_numeric(vwap20) <= pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) and set_buy == False and status == True:
+    elif vwap20 < vwap48 and vwap20 < vwap48:
 
-        coin_list[symbol]['set-buy'] = True
+        coin_list[symbol]['status'] = False
+    #     coin_list[symbol]['set-buy'] = True
 
 
 def buy(symbol, time):
@@ -168,9 +174,25 @@ def buy(symbol, time):
         buy_ = coin_list[symbol]['buy']
         length = len(kilne_tracker[symbol])-1
 
-        list = [x for x in ordersList['list'] if x.isSold == False]
+        close = kilne_tracker[symbol].iloc[-1,
+                                           kilne_tracker[symbol].columns.get_loc('Close')]
+        open = kilne_tracker[symbol].iloc[-1,
+                                          kilne_tracker[symbol].columns.get_loc('Open')]
 
-        if status == True and buy_ == False and set_buy == True and len(list) < 20 and pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) >= pd.to_numeric(kilne_tracker[symbol].loc[length, 'DIF_20']):
+        low = kilne_tracker[symbol].iloc[-1,
+                                         kilne_tracker[symbol].columns.get_loc('Low')]
+
+        # buy_rate = (close - open) / close * 100
+
+        check = pd.to_numeric(close) > pd.to_numeric(open)
+        rate = None
+        if check == True:
+            rate = (open - low) > np.abs(close - open)
+        else:
+            rate = (close - low) > np.abs(close - open)
+
+        # if status == True and buy_ == False and set_buy == True and buy_rate > 0 and pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) >= pd.to_numeric(kilne_tracker[symbol].loc[length, 'DIF_20']):
+        if buy_ == False and rate == True:
 
             coin_list[symbol]['buy'] = True
 
@@ -186,6 +208,7 @@ def buy(symbol, time):
                 startDate=time,
                 volume=kilne_tracker[symbol].loc[length, 'Volume'],
                 rsi=kilne_tracker[symbol].loc[length, 'rsi_14'],
+                status=status
             )
             ordersList['list'].append(order)
 
@@ -205,6 +228,12 @@ def buy(symbol, time):
                 'low': order.low,
                 'Volume': order.volume,
                 'RSI': order.rsi,
+                'BTC': (kilne_tracker['BTCUSDT'].loc[length, 'Close'] - kilne_tracker['BTCUSDT'].loc[length-1, 'Close']) / kilne_tracker['BTCUSDT'].loc[length, 'Close'] * 100,
+                'coin': (kilne_tracker[symbol].loc[length, 'Close'] - kilne_tracker[symbol].loc[length-1, 'Close']) / kilne_tracker[symbol].loc[length, 'Close'] * 100,
+                'V-BTC': kilne_tracker[symbol].loc[length, 'Volume'],
+                'V-B': (pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Volume']) - pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length-1, 'Volume'])) / pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Volume']) * 100,
+                'V-C': (pd.to_numeric(kilne_tracker[symbol].loc[length, 'Volume']) - pd.to_numeric(kilne_tracker[symbol].loc[length-1, 'Volume'])) / pd.to_numeric(kilne_tracker[symbol].loc[length, 'Volume']) * 100,
+                'status': status
             }
             global excel_df
             excel_df = excel_df.append(msg, ignore_index=True)
@@ -214,18 +243,18 @@ def buy(symbol, time):
             message = '--- 10% ---\n' + 'Id: ' + str(order.id) + '\nOrder: Buy\n' + 'Symbol: ' + \
                 str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nBuy price: ' + \
                 str(order.buyPrice) + '\nFrom: ' + \
-                str(order.startDate)
+                str(order.startDate) + '\n DIFF: ' + str(rate)
 
             send_message(message)
 
         else:
 
-            coin_list[symbol]['status']
-            coin_list[symbol]['set-buy']
+            coin_list[symbol]['status'] = False
+            # coin_list[symbol]['set-buy'] = False
 
     except Exception as e:
         # print('error buy ' + str(symbol))
-        print('.')
+        # print('.')
         pass
 
 
@@ -249,10 +278,11 @@ def checkSell(rate, order, price, time):
     total_seconds = difference.total_seconds()
     hours = divmod(total_seconds, 60)[0]
 
-    if rate > 2.0 or rate <= -1.5 or hours >= 90.0:
+    # if rate > 2.0 or rate <= -1.5 or hours >= 90.0:
+    if (order.status == True and rate > 1.5) or (order.status == False and rate > 0.5) or (rate <= -3.0):
 
-        coin_list[order.symbol]['status']
-        coin_list[order.symbol]['buy']
+        coin_list[order.symbol]['status'] = False
+        coin_list[order.symbol]['buy'] = False
 
         order.isSold = True
         ordersList[order.symbol]['date'] = datetime.now()
@@ -280,70 +310,78 @@ def checkSell(rate, order, price, time):
 
 def sell(s, time, price):
 
-    try:
-        list = ordersList['list']
-        p = float(price)
+    # try:
+    list = ordersList['list']
+    p = float(price)
 
-        for i in list:
+    for i in list:
 
-            if i.isSold == False and i.symbol == s:
+        if i.isSold == False and i.symbol == s:
 
-                rate = ((float(price) - float(i.buyPrice)) /
-                        float(i.buyPrice)) * 100
+            rate = ((float(price) - float(i.buyPrice)) /
+                    float(i.buyPrice)) * 100
 
-                checkSell(rate, i, p, time)
-    except:
-        # print('error sell ' + str(s))
-        # print('.')
-        pass
+            checkSell(rate, i, p, time)
+    # except:
+    # print('error sell ' + str(s))
+    # print('.')
+    # pass
 
 
 def updateFrame(symbol, msg):
 
-    try:
-        time = pd.to_datetime(msg['k']['t'], unit='ms')
-        symbol = msg['s']
+    # try:
+    time = pd.to_datetime(msg['k']['t'], unit='ms')
+    symbol = msg['s']
 
-        check = np.where(
-            kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('Date')] == time, True, False)
+    check = np.where(
+        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('Date')] == time, True, False)
 
-        if check == True:
+    if check == True:
 
-            kilne_tracker[symbol].iloc[-1,
-                                       kilne_tracker[symbol].columns.get_loc('Open')] = float(msg['k']['o'])
-            kilne_tracker[symbol].iloc[-1,
-                                       kilne_tracker[symbol].columns.get_loc('High')] = float(msg['k']['h'])
-            kilne_tracker[symbol].iloc[-1,
-                                       kilne_tracker[symbol].columns.get_loc('Low')] = float(msg['k']['l'])
-            kilne_tracker[symbol].iloc[-1,
-                                       kilne_tracker[symbol].columns.get_loc('Close')] = float(msg['k']['c'])
-            kilne_tracker[symbol].iloc[-1,
-                                       kilne_tracker[symbol].columns.get_loc('Volume')] = float(msg['k']['v'])
-            kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol]
-                                       .columns.get_loc('Quote_Volume')] = float(msg['k']['q'])
-        else:
-            buy(symbol, time)
-            kilne_tracker[symbol] = kilne_tracker[symbol].append({
-                'Date': time,
-                'Open': msg['k']['o'],
-                'High': msg['k']['h'],
-                'Low': msg['k']['l'],
-                'Close': msg['k']['c'],
-                'Volume': msg['k']['v'],
-                'Quote_Volume': msg['k']['q'],
-            }, ignore_index=True)
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('Open')] = float(msg['k']['o'])
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('High')] = float(msg['k']['h'])
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('Low')] = float(msg['k']['l'])
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('Close')] = float(msg['k']['c'])
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('Volume')] = float(msg['k']['v'])
+        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol]
+                                   .columns.get_loc('Quote_Volume')] = float(msg['k']['q'])
 
-        
-        kilne_tracker[symbol]['rsi_14'] = get_rsi(kilne_tracker[symbol]['Close'], 14)
-            
-        calcVWAP(symbol=symbol, msg=msg, inte=20)
-        calcVWAP(symbol=symbol, msg=msg, inte=48)
-        calcVWAP(symbol=symbol, msg=msg, inte=84)
+    else:
 
-        checkTouch(symbol=symbol)
-        sell(symbol, time, msg['k']['c'])
-    except:
-        pass
+        # list = [x for x in ordersList['list'] if x.isSold == False]
+        # if len(list) < 20:
+        buy(symbol, time)
+        # else:
+        # coin_list[symbol]['set-buy'] = False
+        # coin_list[symbol]['status'] = False
+
+        kilne_tracker[symbol] = kilne_tracker[symbol].append({
+            'Date': time,
+            'Open': msg['k']['o'],
+            'High': msg['k']['h'],
+            'Low': msg['k']['l'],
+            'Close': msg['k']['c'],
+            'Volume': msg['k']['v'],
+            'Quote_Volume': msg['k']['q'],
+        }, ignore_index=True)
+
+    kilne_tracker[symbol]['rsi_14'] = get_rsi(
+        kilne_tracker[symbol]['Close'], 14)
+
+    calcVWAP(symbol=symbol, msg=msg, inte=20)
+    calcVWAP(symbol=symbol, msg=msg, inte=48)
+    calcVWAP(symbol=symbol, msg=msg, inte=84)
+
+    checkTouch(symbol=symbol)
+    sell(symbol, time, msg['k']['c'])
+    # except:
+    #     pass
 
 
 def handle_socket(msg):
