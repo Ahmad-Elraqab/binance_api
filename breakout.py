@@ -1,4 +1,5 @@
 from os import close
+import threading
 from time import time
 from models.order import Order
 from matplotlib import pyplot as plt
@@ -11,30 +12,16 @@ import numpy as np
 import pandas as pd
 import numpy as np
 import csv
+from client import send_message
+
 # import xlsxwriter
 # import mplfinance as mpf
 
 
 points_list = {}
-support_list = {}
-resistance_list = {}
-current_rs = {}
-isSet = False
 
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
 tickers = client.get_all_tickers()
-
-
-def isSupport(df, i):
-    try:
-        support = float(df[i][3]) < float(df[i-1][3]) and float(df[i][3]) < float(df[i+1][3]) \
-            and float(df[i+1][3]) < float(df[i+2][3]) and float(df[i-1][3]) < float(df[i-2][3])
-
-        return support
-
-    except:
-
-        print("Invalid Index")
 
 
 def isResistance(df, i):
@@ -54,10 +41,7 @@ def getData(interval):
 
     for index, pair in enumerate(exchange_pairs):
         klines = client.get_historical_klines(
-            pair, getInterval(interval), "1 aug 2021")
-
-        points_list[pair] = {}
-        points_list[pair][interval] = []
+            pair, getInterval(interval), "3 days ago")
 
         df = pd.DataFrame(klines)
         df[0] = pd.to_datetime(df[0], unit='ms')
@@ -80,41 +64,25 @@ def getData(interval):
         df['Volume'] = pd.to_numeric(
             df['Volume'], errors='coerce')
 
-        sr = pd.DataFrame(columns=['pair', 'Date', 'price'])
-
-        # list = []
+        list = []
 
         for i, value in enumerate(klines):
 
-            if isSupport(klines, i):
-                l = klines[i][3]
-                sr = sr.append(
-                    {'pair': pair,
-                     'Date': pd.to_datetime(klines[i][0], unit='ms'),
-                     'price': l
-                     }, ignore_index=True
-                )
-                # list.append(pd.to_numeric(l))
-
-            elif isResistance(klines, i):
+            if isResistance(klines, i):
                 h = klines[i][2]
-                sr = sr.append(
-                    {'pair': pair,
-                     'Date': pd.to_datetime(klines[i][0], unit='ms'),
-                     'price': h
-                     }, ignore_index=True
-                )
-                # list.append(pd.to_numeric(h))
+                list.append(pd.to_numeric(h))
 
-        sr = sr.sort_values(["price"], ascending=True)
-        sr.to_csv(f'SR/{pair}@ticker.csv', mode='a',
-                  index=False, header=False)
+        check = analyzePoint(pair, list)
 
-        # pd.to_numeric(df['Close']).plot()
-        # pd.to_numeric(sr['price']).plot()
-        # mpf.plot(df, type='candle', style='yahoo',
-        #          volume=True, hlines=list)
-        # plt.show()
+        points_list[pair] = {}
+        points_list[pair]['isCheck'] = False
+        points_list[pair]['value'] = 0
+
+        if check == 0:
+            points_list[pair]['check'] = False
+        else:
+            points_list[pair]['check'] = True
+            points_list[pair]['value'] = check
 
     print("DONE")
 
@@ -136,6 +104,26 @@ def loadDate(interval):
             line_count += 1
 
     return points_list
+
+
+def analyzePoint(symbol, list):
+
+    if len(list) >= 3:
+
+        if list[-1] < list[-2] and list[-2] < list[-3]:
+
+            points_list[symbol] = list[-1]
+
+            send_message('4h Track ----- ' + str(symbol) + '\n levels:\n' +
+                         str(list[-1]) + '\n' + str(list[-2]) + '\n' + str(list[-3]))
+
+            return list[-1]
+
+        else:
+            return 0
+
+    else:
+        return 0
 
 
 def getInterval(interval):
@@ -163,37 +151,66 @@ def getInterval(interval):
         return Client.KLINE_INTERVAL_1MINUTE
 
 
-def analyzePoint(interval, symbol, current_price):
+def handle_socket_message(msg):
 
-    support_list[symbol] = {}
-    resistance_list[symbol] = {}
+    # 1 - load prev orders.
+    # 2 - load pairs SR and set them.
+    symbol = msg['k']['s']
+    price = msg['k']['c']
 
-    support_list[symbol][interval] = []
-    resistance_list[symbol][interval] = []
-
-    # print(points_list[symbol][interval])
-    for point in points_list[symbol][interval]:
-
-        if point > current_price:
-
-            resistance_list[symbol][interval].append(float(point))
-
-        else:
-
-            support_list[symbol][interval].append(float(point))
-
-    current_rs[symbol] = {}
-    current_rs[symbol]['support'] = find_nearest(
-        support_list[symbol][interval], current_price)
-    current_rs[symbol]['resistance'] = find_nearest(
-        resistance_list[symbol][interval], current_price)
-
-    print(symbol, "\t support\t", current_rs[symbol]['support'])
-    print(symbol, "\t resistance\t", current_rs[symbol]['resistance'])
+    if points_list[symbol]['check'] == True:
+        if pd.to_numeric(points_list[symbol]['value']) <= pd.to_numeric(price) and points_list[symbol]['isCheck'] == False:
+            send_message(symbol + ' 4h alert breakout level...' +
+                         ' at ' + str(points_list[symbol]['value']))
+            points_list[symbol]['isCheck'] = True
 
 
-def find_nearest(array, value):
-    array = np.asarray(array)
-    idx = (np.abs(array - float(value))).argmin()
-    return array[idx]
+def realtime(msg):
+    if 'data' in msg:
+        # Your code
+        handle_socket_message(msg['data'])
 
+    else:
+        stream.stream_error = True
+
+
+print('Done...')
+print('Start streaming...')
+
+
+class Stream():
+
+    def start(self):
+        self.bm = ThreadedWebsocketManager(
+            api_key=API_KEY, api_secret=API_SECRET)
+        self.bm.start()
+        self.stream_error = False
+        self.multiplex_list = list()
+
+        # listOfPairings: all pairs with USDT (over 250 items in list)
+        for pairing in exchange_pairs:
+            self.multiplex_list.append(pairing.lower() + '@kline_4h')
+        self.multiplex = self.bm.start_multiplex_socket(
+            callback=realtime, streams=self.multiplex_list)
+
+        # monitoring the error
+        stop_trades = threading.Thread(
+            target=stream.restart_stream, daemon=True)
+        stop_trades.start()
+
+    def restart_stream(self):
+        while True:
+            time.sleep(1)
+            if self.stream_error == True:
+                self.bm.stop_socket(self.multiplex)
+                time.sleep(5)
+                self.stream_error = False
+                self.multiplex = self.bm.start_multiplex_socket(
+                    callback=realtime, streams=self.multiplex_list)
+
+
+getData('4hr')
+
+stream = Stream()
+stream.start()
+stream.bm.join()

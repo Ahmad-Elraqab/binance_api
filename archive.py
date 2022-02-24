@@ -5,14 +5,31 @@
 
 # @@ GET USDT PAIRS @@
 
-# exchange_pairs = {}
-# client = Client(api_key=API_KEY, api_secret=API_SECRET)
-# exchange_info = client.get_exchange_info()
-# for s in exchange_info['symbols']:
-#     if 'USDT' in s['symbol']:
-#         exchange_pairs[s['symbol']] = {'rate': 1.5}
-# print(exchange_pairs)
+from binance.client import Client
+from pandas.core.frame import DataFrame
 
+from config import API_KEY, API_SECRET
+
+
+exchange_pairs = DataFrame(columns=['symbol'])
+
+client = Client(api_key=API_KEY, api_secret=API_SECRET)
+exchange_info = client.get_exchange_info()
+for s in exchange_info['symbols']:
+    if 'DOWN' in s['symbol'] or 'UP' in s['symbol']:
+        print('Future')
+    elif 'BTC' in s['symbol']:
+
+        print(s['symbol'])
+        # exchange_pairs[s['symbol']] = {'rate': 1.5}
+        exchange_pairs = exchange_pairs.append(
+            {'symbol': s['symbol']}, ignore_index=True)
+
+# print(exchange_pairs.keys())
+
+# print(len(exchange_pairs))
+
+exchange_pairs.to_csv('exchange_pairs.csv')
 
 # @@ GET HISTORICAL DATA @@
 
@@ -73,4 +90,21 @@
 # else:
 # continue
 
-
+# if row['48-zscore'] >= 2.5:
+#     order.gainProfit += rate
+#     order.endDate = row['Date']
+#     new_row = {'symbol': order.symbol,
+#                'interval': order.interval,
+#                'price': 'null',
+#                'buyAmount': order.amount,
+#                'gainProfit': order.gainProfit,
+#                'gainAmount': order.gainProfit / 100 * order.amount,
+#                'totalAmount': (order.gainProfit / 100 + 1) * order.amount,
+#                'startDate': order.startDate,
+#                'endDate': order.endDate,
+#                'avgDate': order.endDate - order.startDate,
+#                'volume': order.volume,
+#                'quoteVolume': order.qVolume,
+#                }
+#     df = df.append(new_row, ignore_index=True)
+#     ordersList.remove(order)
