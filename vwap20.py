@@ -1,3 +1,4 @@
+from ast import And
 from datetime import datetime
 import threading
 import uuid
@@ -13,12 +14,12 @@ import os
 import errno
 import concurrent.futures
 
-FILE_NAME = 'RSI-15M-stream-v-v-5'
+FILE_NAME = 'RSI-15M-stream-1'
 coin_list = {}
 kilne_tracker = {}
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
 excel_df = DataFrame(columns=['id', 'symbol', 'type', 'interval', 'amount',
-                              'startDate', 'endDate', 'buy', 'sell', 'growth/drop', 'closed', 'high', 'low', 'Volume', 'RSI', 'BTC', 'coin', 'V-BTC', 'V-B', 'V-C', 'status'])
+                              'startDate', 'endDate', 'buy', 'sell', 'growth/drop', 'closed', 'status', '15', '30', '45', '60', 'vwap20'])
 ordersList = {}
 
 INTERVAL = '15m'
@@ -77,8 +78,8 @@ def readHistory(i):
         # c_df = c_df.append(
         #     {'s': i, 'status': False, 'price': data.iloc[-1, 4], 'buy': False, 'set-buy': False}, ignore_index=True)
 
-        coin_list[i] = {'s': i, 'status': False,
-                        'price': data.iloc[-1, 4], 'buy': False, 'set-buy': False}
+        coin_list[i] = {'s': i, 'status': None,
+                        'price': data.iloc[-1, 4], 'buy': False, 'set-buy': None}
 
         kilne_tracker[i] = data
 
@@ -88,51 +89,12 @@ def readHistory(i):
         pass
 
 
-def get_rsi(close, lookback):
-
-    close = pd.to_numeric(close)
-    ret = close.diff()
-    up = []
-    down = []
-    for i in range(len(ret)):
-        if ret[i] < 0:
-            up.append(0)
-            down.append(ret[i])
-        else:
-            up.append(ret[i])
-            down.append(0)
-
-    up_series = pd.Series(up)
-    down_series = pd.Series(down).abs()
-
-    up_ewm = up_series.ewm(com=lookback - 1, adjust=False).mean()
-    down_ewm = down_series.ewm(com=lookback - 1, adjust=False).mean()
-
-    rs = up_ewm/down_ewm
-
-    rsi = 100 - (100 / (1 + rs))
-
-    rsi_df = pd.DataFrame(rsi).rename(
-        columns={0: 'rsi'}).set_index(close.index)
-
-    rsi_df = rsi_df.dropna()
-
-    return rsi_df[3:]
-
-
 def calcVWAP(symbol, msg, inte):
 
     high = pd.to_numeric(kilne_tracker[symbol]['High'])
     low = pd.to_numeric(kilne_tracker[symbol]['Low'])
     close = pd.to_numeric(kilne_tracker[symbol]['Close'])
     volume = pd.to_numeric(kilne_tracker[symbol]['Volume'])
-
-    # df = kilne_tracker[symbol].iloc[1:50]
-
-    # df = kilne_tracker[symbol].iloc[-1:-14,
-    #                                 kilne_tracker[symbol].columns.get_loc('Close')].sum()
-
-    # print(df)
 
     value1 = ((high + low + close) / 3 * volume).rolling(inte).sum()
 
@@ -151,28 +113,26 @@ def checkTouch(symbol):
         kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('DIF_84')])
 
     status = coin_list[symbol]['status']
-    set_buy = coin_list[symbol]['set-buy']
     length = len(kilne_tracker[symbol])-1
 
-    if pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) <= pd.to_numeric(vwap20) and status == False and vwap20 > vwap48 and vwap48 > vwap84:
-    # if status == False and vwap20 > vwap48 and vwap48 > vwap84:
+    # if pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) <= pd.to_numeric(vwap20) and status == False and vwap20 > vwap48 and vwap48 > vwap84:
+
+    #     coin_list[symbol]['status'] = True
+
+    if pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) >= pd.to_numeric(vwap20) and pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) >= pd.to_numeric(vwap48) and pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) >= pd.to_numeric(vwap84):
 
         coin_list[symbol]['status'] = True
-
-    # elif pd.to_numeric(vwap20) <= pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) and set_buy == False and status == True:
-    elif vwap20 < vwap48 and vwap20 < vwap48:
-
-        coin_list[symbol]['status'] = False
-    #     coin_list[symbol]['set-buy'] = True
 
 
 def buy(symbol, time):
 
     try:
         status = coin_list[symbol]['status']
-        set_buy = coin_list[symbol]['set-buy']
         buy_ = coin_list[symbol]['buy']
         length = len(kilne_tracker[symbol])-1
+
+        vwap20 = pd.to_numeric(
+            kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('DIF_20')])
 
         close = kilne_tracker[symbol].iloc[-1,
                                            kilne_tracker[symbol].columns.get_loc('Close')]
@@ -182,74 +142,153 @@ def buy(symbol, time):
         low = kilne_tracker[symbol].iloc[-1,
                                          kilne_tracker[symbol].columns.get_loc('Low')]
 
-        # buy_rate = (close - open) / close * 100
+        coin_6h = (kilne_tracker['BTCUSDT'].loc[length, 'Close'] - kilne_tracker['BTCUSDT'].loc[length -
+                   8, 'Close']) / kilne_tracker['BTCUSDT'].loc[length, 'Close'] * 100
+        vwap = (close - vwap20) / close * 100
+
+        btc_price = (kilne_tracker['BTCUSDT'].loc[length, 'Close'] - kilne_tracker['BTCUSDT'].loc[length -
+                     1, 'Close']) / kilne_tracker['BTCUSDT'].loc[length, 'Close'] * 100
 
         check = pd.to_numeric(close) > pd.to_numeric(open)
+
         rate = None
+
         if check == True:
             rate = (open - low) > np.abs(close - open)
         else:
             rate = (close - low) > np.abs(close - open)
 
-        # if status == True and buy_ == False and set_buy == True and buy_rate > 0 and pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) >= pd.to_numeric(kilne_tracker[symbol].loc[length, 'DIF_20']):
-        if buy_ == False and rate == True:
+        global excel_df
 
-            coin_list[symbol]['buy'] = True
+        if buy_ == False and rate == True and status == True:
 
-            order = Order(
-                id=uuid.uuid1(),
-                type='rsi',
-                symbol=symbol,
-                interval=INTERVAL,
-                buyPrice=kilne_tracker[symbol].loc[length, 'Close'],
-                sellPrice=kilne_tracker[symbol].loc[length, 'Close'] +
-                (kilne_tracker[symbol].loc[length, 'Close'] * 0.05),
-                amount=500,
-                startDate=time,
-                volume=kilne_tracker[symbol].loc[length, 'Volume'],
-                rsi=kilne_tracker[symbol].loc[length, 'rsi_14'],
-                status=status
-            )
-            ordersList['list'].append(order)
+            print(btc_price)
+            print(coin_list[symbol]['set-buy'])
 
-            msg = {
-                'id': order.id,
-                'symbol': order.symbol,
-                'type': order.type,
-                'interval': order.interval,
-                'amount': order.amount,
-                'startDate': order.startDate,
-                'endDate': order.endDate,
-                'buy': order.buyPrice,
-                'sell': order.sellPrice,
-                'closed': order.isSold,
-                'growth/drop': order.rate,
-                'high': order.high,
-                'low': order.low,
-                'Volume': order.volume,
-                'RSI': order.rsi,
-                'BTC': (kilne_tracker['BTCUSDT'].loc[length, 'Close'] - kilne_tracker['BTCUSDT'].loc[length-1, 'Close']) / kilne_tracker['BTCUSDT'].loc[length, 'Close'] * 100,
-                'coin': (kilne_tracker[symbol].loc[length, 'Close'] - kilne_tracker[symbol].loc[length-1, 'Close']) / kilne_tracker[symbol].loc[length, 'Close'] * 100,
-                'V-BTC': kilne_tracker[symbol].loc[length, 'Volume'],
-                'V-B': (pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Volume']) - pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length-1, 'Volume'])) / pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Volume']) * 100,
-                'V-C': (pd.to_numeric(kilne_tracker[symbol].loc[length, 'Volume']) - pd.to_numeric(kilne_tracker[symbol].loc[length-1, 'Volume'])) / pd.to_numeric(kilne_tracker[symbol].loc[length, 'Volume']) * 100,
-                'status': status
-            }
-            global excel_df
-            excel_df = excel_df.append(msg, ignore_index=True)
+            if btc_price < 0.12 and coin_list[symbol]['set-buy'] == None:
+                coin_list[symbol]['set-buy'] = True
 
-            excel_df.to_csv(f'results/data@'+FILE_NAME+'.csv')
+                coin_list[symbol]['buy'] = True
 
-            message = '--- 10% ---\n' + 'Id: ' + str(order.id) + '\nOrder: Buy\n' + 'Symbol: ' + \
-                str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nBuy price: ' + \
-                str(order.buyPrice) + '\nFrom: ' + \
-                str(order.startDate) + '\n DIFF: ' + str(rate)
+                order = Order(
+                    id=uuid.uuid1(),
+                    type='rsi',
+                    symbol=symbol,
+                    interval=INTERVAL,
+                    buyPrice=kilne_tracker[symbol].loc[length, 'Close'],
+                    sellPrice=kilne_tracker[symbol].loc[length, 'Close'] +
+                    (kilne_tracker[symbol].loc[length, 'Close'] * 0.05),
+                    amount=500,
+                    startDate=time,
+                    volume=kilne_tracker[symbol].loc[length, 'Volume'],
+                    rsi=0,
+                    status=status
+                )
+                ordersList['list'].append(order)
 
-            send_message(message)
+                msg = {
+                    'id': order.id,
+                    'symbol': order.symbol,
+                    'type': order.type,
+                    'interval': order.interval,
+                    'amount': order.amount,
+                    'startDate': order.startDate,
+                    'endDate': order.endDate,
+                    'buy': order.buyPrice,
+                    'sell': order.sellPrice,
+                    'closed': order.isSold,
+                    'growth/drop': order.rate,
+                    'status': status,
+                    'vwap20': vwap,
+                    'high': order.high,
+                    'low': order.low,
+                    'Volume': order.volume,
+                    'RSI': order.rsi,
+                    'BTC': btc_price,
+                    'coin': (kilne_tracker[symbol].loc[length, 'Close'] - kilne_tracker[symbol].loc[length-1, 'Close']) / kilne_tracker[symbol].loc[length, 'Close'] * 100,
+                    'coin-6h': coin_6h,
+                    'V-BTC': kilne_tracker[symbol].loc[length, 'Volume'],
+                    'V-B': (pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Volume']) - pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length-1, 'Volume'])) / pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Volume']) * 100,
+                    'V-C': (pd.to_numeric(kilne_tracker[symbol].loc[length, 'Volume']) - pd.to_numeric(kilne_tracker[symbol].loc[length-1, 'Volume'])) / pd.to_numeric(kilne_tracker[symbol].loc[length, 'Volume']) * 100,
 
+
+                }
+                excel_df = excel_df.append(msg, ignore_index=True)
+
+                excel_df.to_csv(f'results/data@'+FILE_NAME+'.csv')
+
+                message = '--- 10% ---\n' + 'Id: ' + str(order.id) + '\nOrder: Buy\n' + 'Symbol: ' + \
+                    str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nBuy price: ' + \
+                    str(order.buyPrice) + '\nFrom: ' + \
+                    str(order.startDate) + '\n DIFF: ' + str(rate)
+
+            elif btc_price > 0.12 and coin_list[symbol]['set-buy'] == None:
+                coin_list[symbol]['set-buy'] = False
+
+            elif btc_price < -0.12 and coin_list[symbol]['set-buy'] == False:
+                coin_list[symbol]['set-buy'] = True
+
+                coin_list[symbol]['buy'] = True
+
+                order = Order(
+                    id=uuid.uuid1(),
+                    type='rsi',
+                    symbol=symbol,
+                    interval=INTERVAL,
+                    buyPrice=kilne_tracker[symbol].loc[length, 'Close'],
+                    sellPrice=kilne_tracker[symbol].loc[length, 'Close'] +
+                    (kilne_tracker[symbol].loc[length, 'Close'] * 0.05),
+                    amount=500,
+                    startDate=time,
+                    volume=kilne_tracker[symbol].loc[length, 'Volume'],
+                    rsi=0,
+                    status=status
+                )
+                ordersList['list'].append(order)
+
+                msg = {
+                    'id': order.id,
+                    'symbol': order.symbol,
+                    'type': order.type,
+                    'interval': order.interval,
+                    'amount': order.amount,
+                    'startDate': order.startDate,
+                    'endDate': order.endDate,
+                    'buy': order.buyPrice,
+                    'sell': order.sellPrice,
+                    'closed': order.isSold,
+                    'growth/drop': order.rate,
+                    'status': status,
+                    'vwap20': vwap,
+                    'high': order.high,
+                    'low': order.low,
+                    'Volume': order.volume,
+                    'RSI': order.rsi,
+                    'BTC': btc_price,
+                    'coin': (kilne_tracker[symbol].loc[length, 'Close'] - kilne_tracker[symbol].loc[length-1, 'Close']) / kilne_tracker[symbol].loc[length, 'Close'] * 100,
+                    'coin-6h': coin_6h,
+                    'V-BTC': kilne_tracker[symbol].loc[length, 'Volume'],
+                    'V-B': (pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Volume']) - pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length-1, 'Volume'])) / pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Volume']) * 100,
+                    'V-C': (pd.to_numeric(kilne_tracker[symbol].loc[length, 'Volume']) - pd.to_numeric(kilne_tracker[symbol].loc[length-1, 'Volume'])) / pd.to_numeric(kilne_tracker[symbol].loc[length, 'Volume']) * 100,
+
+
+                }
+                excel_df = excel_df.append(msg, ignore_index=True)
+
+                excel_df.to_csv(f'results/data@'+FILE_NAME+'.csv')
+
+                message = '--- 10% ---\n' + 'Id: ' + str(order.id) + '\nOrder: Buy\n' + 'Symbol: ' + \
+                    str(order.symbol) + '\nInterval: ' + str(order.interval)+'\nBuy price: ' + \
+                    str(order.buyPrice) + '\nFrom: ' + \
+                    str(order.startDate) + '\n DIFF: ' + str(rate)
+
+            # send_message(message)
+            else:
+                coin_list[symbol]['set-buy'] == None
         else:
 
             coin_list[symbol]['status'] = False
+            coin_list[symbol]['set-buy'] = None
             # coin_list[symbol]['set-buy'] = False
 
     except Exception as e:
@@ -259,9 +298,6 @@ def buy(symbol, time):
 
 
 def checkSell(rate, order, price, time):
-
-    # vwap20 = kilne_tracker[order.symbol].iloc[-1,
-    #                                           kilne_tracker[order.symbol].columns.get_loc('DIF_20')]
 
     order.sellPrice = price
     order.endDate = time
@@ -278,11 +314,12 @@ def checkSell(rate, order, price, time):
     total_seconds = difference.total_seconds()
     hours = divmod(total_seconds, 60)[0]
 
-    # if rate > 2.0 or rate <= -1.5 or hours >= 90.0:
-    if (order.status == True and rate > 1.5) or (order.status == False and rate > 0.5) or (rate <= -3.0):
+    # if (order.status == True and rate > 1.5) or (order.status == False and rate > 0.5) or (rate <= -3.0) or hours >= 45.0:
+    if rate > 0.5 or (rate <= -3.0) or hours >= 45.0:
 
         coin_list[order.symbol]['status'] = False
         coin_list[order.symbol]['buy'] = False
+        coin_list[order.symbol]['set-buy'] = None
 
         order.isSold = True
         ordersList[order.symbol]['date'] = datetime.now()
@@ -292,7 +329,7 @@ def checkSell(rate, order, price, time):
             str(order.startDate) + '\nTo: ' + \
             str(time) + '\ngrowth/drop: ' + str(rate)
 
-        send_message(message)
+        # send_message(message)
 
     excel_df.loc[excel_df['id'] == order.id, 'sell'] = order.sellPrice
     excel_df.loc[excel_df['id'] == order.id, 'endDate'] = order.endDate
@@ -302,15 +339,21 @@ def checkSell(rate, order, price, time):
     excel_df.loc[excel_df['id'] == order.id, 'growth/drop'] = order.rate
     excel_df.loc[excel_df['id'] == order.id, 'high'] = order.high
     excel_df.loc[excel_df['id'] == order.id, 'low'] = order.low
-    excel_df.loc[excel_df['id'] == order.id, 'Volume'] = order.volume
-    excel_df.loc[excel_df['id'] == order.id, 'RSI'] = order.rsi
+
+    if hours == 15.0:
+        excel_df.loc[excel_df['id'] == order.id, '15'] = rate
+    elif hours == 30.0:
+        excel_df.loc[excel_df['id'] == order.id, '30'] = rate
+    elif hours == 45.0:
+        excel_df.loc[excel_df['id'] == order.id, '45'] = rate
+    elif hours == 60.0:
+        excel_df.loc[excel_df['id'] == order.id, '60'] = rate
 
     excel_df.to_csv(f'results/data@'+FILE_NAME+'.csv')
 
 
 def sell(s, time, price):
 
-    # try:
     list = ordersList['list']
     p = float(price)
 
@@ -322,15 +365,10 @@ def sell(s, time, price):
                     float(i.buyPrice)) * 100
 
             checkSell(rate, i, p, time)
-    # except:
-    # print('error sell ' + str(s))
-    # print('.')
-    # pass
 
 
 def updateFrame(symbol, msg):
 
-    # try:
     time = pd.to_datetime(msg['k']['t'], unit='ms')
     symbol = msg['s']
 
@@ -357,9 +395,6 @@ def updateFrame(symbol, msg):
         # list = [x for x in ordersList['list'] if x.isSold == False]
         # if len(list) < 20:
         buy(symbol, time)
-        # else:
-        # coin_list[symbol]['set-buy'] = False
-        # coin_list[symbol]['status'] = False
 
         kilne_tracker[symbol] = kilne_tracker[symbol].append({
             'Date': time,
@@ -371,17 +406,12 @@ def updateFrame(symbol, msg):
             'Quote_Volume': msg['k']['q'],
         }, ignore_index=True)
 
-    kilne_tracker[symbol]['rsi_14'] = get_rsi(
-        kilne_tracker[symbol]['Close'], 14)
-
     calcVWAP(symbol=symbol, msg=msg, inte=20)
     calcVWAP(symbol=symbol, msg=msg, inte=48)
     calcVWAP(symbol=symbol, msg=msg, inte=84)
 
     checkTouch(symbol=symbol)
     sell(symbol, time, msg['k']['c'])
-    # except:
-    #     pass
 
 
 def handle_socket(msg):
