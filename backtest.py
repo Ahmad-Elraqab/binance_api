@@ -58,7 +58,7 @@ def readHistory(i):
         global c_df
 
         klines = client.get_historical_klines(
-            symbol=i, interval=H_HISTORY, start_str="1 days ago")
+            symbol=i, interval=H_HISTORY, start_str="10 days ago")
 
         data = pd.DataFrame(klines)
 
@@ -112,12 +112,11 @@ def buy(symbol, time):
         list = np.min([vwap20, vwap48, vwap84])
         close = pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close'])
         open = pd.to_numeric(kilne_tracker[symbol].loc[length, 'Open'])
-
         global excel_df
-
+        
         print(close)
         print(list)
-
+        
         if buy_ == False and status == True and close < kilne_tracker[symbol].loc[length, coin_list[symbol]['type']] and close > list and open > kilne_tracker[symbol].loc[length, coin_list[symbol]['type']]:
 
             coin_list[symbol]['buy'] = True
@@ -157,7 +156,6 @@ def buy(symbol, time):
                 'RSI': order.rsi,
                 'coin': (kilne_tracker[symbol].loc[length, 'Close'] - kilne_tracker[symbol].loc[length-1, 'Close']) / kilne_tracker[symbol].loc[length, 'Close'] * 100,
                 'V-BTC': kilne_tracker[symbol].loc[length, 'Volume'],
-                'BTC': (pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Close']) - pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length-1, 'Close'])) / pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Close']) * 100,
                 'V-B': (pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Volume']) - pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length-1, 'Volume'])) / pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Volume']) * 100,
                 'V-C': (pd.to_numeric(kilne_tracker[symbol].loc[length, 'Volume']) - pd.to_numeric(kilne_tracker[symbol].loc[length-1, 'Volume'])) / pd.to_numeric(kilne_tracker[symbol].loc[length, 'Volume']) * 100,
 
@@ -321,56 +319,15 @@ def updateFrame(symbol, msg):
     sell(symbol, time, msg['k']['c'])
 
 
-def handle_socket(msg):
+def handle_socket():
 
-    time = pd.to_datetime(msg['k']['t'], unit='ms')
-    close = msg['k']['c']
-    symbol = msg['s']
+    for key, value in kilne_tracker.values():
 
-    updateFrame(symbol=symbol, msg=msg)
+        print(key)
+        print(value)
+        break
 
-
-def realtime(msg):
-
-    if 'data' in msg:
-        handle_socket(msg['data'])
-
-    else:
-        stream.stream_error = True
-
-
-class Stream():
-
-    def start(self):
-        self.bm = ThreadedWebsocketManager(
-            api_key=API_KEY, api_secret=API_SECRET)
-        self.bm.start()
-        self.stream_error = False
-        self.multiplex_list = list()
-
-        # listOfPairings: all pairs with USDT (over 250 items in list)
-        for pairing in exchange_pairs:
-            self.multiplex_list.append(pairing.lower() + '@kline_'+INTERVAL)
-        self.multiplex = self.bm.start_multiplex_socket(
-            callback=realtime, streams=self.multiplex_list)
-
-        # monitoring the error
-        stop_trades = threading.Thread(
-            target=stream.restart_stream, daemon=True)
-        stop_trades.start()
-
-    def restart_stream(self):
-        while True:
-            time.sleep(1)
-            if self.stream_error == True:
-                self.bm.stop_socket(self.multiplex)
-                time.sleep(5)
-                self.stream_error = False
-                self.multiplex = self.bm.start_multiplex_socket(
-                    callback=realtime, streams=self.multiplex_list)
-
-
-send_message('NEW')
+    # updateFrame(symbol=symbol, msg=msg)
 
 
 def init():
@@ -380,6 +337,7 @@ def init():
 
 
 init()
+
 
 t1 = time.perf_counter()
 
@@ -391,8 +349,4 @@ t2 = time.perf_counter()
 
 print(f'Finished in {t2 - t1} seconds')
 
-stream = Stream()
-time.sleep(5)
-
-stream.start()
-stream.bm.join()
+handle_socket()
