@@ -1,4 +1,4 @@
-from config import exchange_pairs, telegram_bot_id, telegram_chat_id
+from config import exchange_pairs, telegram_bot_id
 import pandas as pd
 import requests
 
@@ -93,13 +93,13 @@ def handle_socket_message(msg):
         kilne_tracker2[symbol] = {}
 
 
-def get_url(url, data):
+def get_url(url, data, telegram_chat_id, files=None):
     url = "https://api.telegram.org/bot1805612273:AAGq8OiJBDy1ktg-4MGEVj-7r4H3jE_2nis/sendMessage?chat_id=" + \
         telegram_chat_id+"&text="+data
 
     requests.request("GET", url)
 
 
-def send_message(text):
+def send_message(text, telegram_chat_id, files=None):
     url = "https://api.telegram.org/" + telegram_bot_id + "/sendMessage"
-    get_url(url, text)
+    get_url(url, text, telegram_chat_id, files)

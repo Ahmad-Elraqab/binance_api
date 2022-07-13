@@ -5,8 +5,9 @@ telegram_chat_id = '-753037876'
 telegram_bot_id = '1805612273:AAGq8OiJBDy1ktg-4MGEVj-7r4H3jE_2nis'
 
 exchange_pairs = [
-    'HNTUSDT',
+    'ZILUSDT',
     'BTCUSDT',
+    'HNTUSDT',
     'ETHUSDT',
     'BNBUSDT',
     'NEOUSDT',
@@ -28,7 +29,6 @@ exchange_pairs = [
     'BTTUSDT',
     'ONGUSDT',
     'HOTUSDT',
-    'ZILUSDT',
     'ZRXUSDT',
     'FETUSDT',
     'BATUSDT',

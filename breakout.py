@@ -1,12 +1,13 @@
 from os import close
+from tabnanny import check
 import threading
-from time import time
+import time
 from models.order import Order
 from matplotlib import pyplot as plt
 from binance import Client
 from config import API_KEY, API_SECRET, exchange_pairs
 from binance.client import AsyncClient, Client
-from datetime import datetime
+from datetime import date, datetime
 from binance.streams import ThreadedWebsocketManager
 import numpy as np
 import pandas as pd
@@ -14,11 +15,8 @@ import numpy as np
 import csv
 from client import send_message
 
-# import xlsxwriter
-# import mplfinance as mpf
-
-
 points_list = {}
+kilne_tracker = {}
 
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
 tickers = client.get_all_tickers()
@@ -39,91 +37,80 @@ def isResistance(df, i):
 
 def getData(interval):
 
+    global points_list
+
     for index, pair in enumerate(exchange_pairs):
-        klines = client.get_historical_klines(
-            pair, getInterval(interval), "3 days ago")
 
-        df = pd.DataFrame(klines)
-        df[0] = pd.to_datetime(df[0], unit='ms')
+        try:
+            klines = client.get_historical_klines(
+                pair, getInterval(interval), "3 month ago")
 
-        df.columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'IGNORE', 'Quote_Volume',
-                      'Trades_Count', 'BUY_VOL', 'BUY_VOL_VAL', 'x']
+            df = pd.DataFrame(klines)
+            # df[0] = pd.to_datetime(df[0], unit='ms')
 
-        df = df.drop(columns=['IGNORE',
-                              'Trades_Count', 'BUY_VOL', 'BUY_VOL_VAL', 'x'])
+            df.columns = ['Date', 'Open', 'High', 'Low', 'Close', 'Volume', 'IGNORE', 'Quote_Volume',
+                          'Trades_Count', 'BUY_VOL', 'BUY_VOL_VAL', 'x']
 
-        df = df.set_index('Date')
-        df['Close'] = pd.to_numeric(
-            df['Close'], errors='coerce')
-        df['Open'] = pd.to_numeric(
-            df['Open'], errors='coerce')
-        df['High'] = pd.to_numeric(
-            df['High'], errors='coerce')
-        df['Low'] = pd.to_numeric(
-            df['Low'], errors='coerce')
-        df['Volume'] = pd.to_numeric(
-            df['Volume'], errors='coerce')
+            df = df.drop(columns=['IGNORE',
+                                  'Trades_Count', 'BUY_VOL', 'BUY_VOL_VAL', 'x'])
 
-        list = []
+            # df = df.set_index('Date')
+            df['Close'] = pd.to_numeric(
+                df['Close'], errors='coerce')
+            df['Open'] = pd.to_numeric(
+                df['Open'], errors='coerce')
+            df['High'] = pd.to_numeric(
+                df['High'], errors='coerce')
+            df['Low'] = pd.to_numeric(
+                df['Low'], errors='coerce')
+            df['Volume'] = pd.to_numeric(
+                df['Volume'], errors='coerce')
 
-        for i, value in enumerate(klines):
+            list = []
 
-            if isResistance(klines, i):
-                h = klines[i][2]
-                list.append(pd.to_numeric(h))
+            for i, value in enumerate(klines):
 
-        check = analyzePoint(pair, list)
+                if isResistance(klines, i):
+                    h = klines[i][2]
+                    list.append(
+                        {'s': pair, 'h': pd.to_numeric(h), 'd': pd.to_datetime(klines[i][0], unit='ms')})
 
-        points_list[pair] = {}
-        points_list[pair]['isCheck'] = False
-        points_list[pair]['value'] = 0
+            analyzePoint(pair, list)
 
-        if check == 0:
-            points_list[pair]['check'] = False
-        else:
-            points_list[pair]['check'] = True
-            points_list[pair]['value'] = check
+            kilne_tracker[pair] = df
 
-    print("DONE")
-
-
-def loadDate(interval):
-    with open(f'files/{interval}.csv') as csv_file:
-        csv_reader = csv.reader(csv_file, delimiter=',')
-        line_count = 0
-
-        for row in csv_reader:
-
-            if not row[0] in points_list:
-                points_list[row[0]] = {}
-                points_list[row[0]][interval] = []
-                points_list[row[0]][interval].append(row[2])
-            else:
-                points_list[row[0]][interval].append(row[2])
-
-            line_count += 1
-
-    return points_list
+        except:
+            print(i)
 
 
 def analyzePoint(symbol, list):
 
-    if len(list) >= 3:
+    global points_list
+    points_list[symbol] = {}
+    print(symbol)
+    print(list[-1]['d'])
+    print(list[-1]['h'])
+    print(list[-2]['d'])
+    print(list[-2]['h'])
+    print('lmao')
+    if len(list) >= 2:
+        print('lmao')
 
-        if list[-1] < list[-2] and list[-2] < list[-3]:
+        if list[-1]['h'] < list[-2]['h']:
+            print('lmao')
 
-            points_list[symbol] = list[-1]
+            difference = (list[-1]['d'] - list[-2]['d'])
+            total_seconds = difference.total_seconds()
 
-            send_message('4h Track ----- ' + str(symbol) + '\n levels:\n' +
-                         str(list[-1]) + '\n' + str(list[-2]) + '\n' + str(list[-3]))
-
-            return list[-1]
-
-        else:
-            return 0
-
-    else:
-        return 0
+            hours = divmod(total_seconds, 14400)[0]
+            points_list[symbol]['status'] = False
+            points_list[symbol]['isCross'] = False
+            points_list[symbol]['value'] = (
+                list[-1]['h']-list[-2]['h']) / hours
+            points_list[symbol]['d'] = list[-2]['d']
+            points_list[symbol]['h'] = list[-2]['h']
+            points_list[symbol]['h1'] = list[-1]['h']
+            points_list[symbol]['d1'] = list[-1]['d']
 
 
 def getInterval(interval):
@@ -152,17 +139,78 @@ def getInterval(interval):
 
 
 def handle_socket_message(msg):
+    # try:
+    time = pd.to_datetime(msg['k']['t'], unit='ms')
+    symbol = msg['s']
+    price = msg['k']['h']
 
-    # 1 - load prev orders.
-    # 2 - load pairs SR and set them.
-    symbol = msg['k']['s']
-    price = msg['k']['c']
+    check = np.where(
+        kilne_tracker[symbol].iloc[-1]['Date'] == time, True, False)
 
-    if points_list[symbol]['check'] == True:
-        if pd.to_numeric(points_list[symbol]['value']) <= pd.to_numeric(price) and points_list[symbol]['isCheck'] == False:
-            send_message(symbol + ' 4h alert breakout level...' +
-                         ' at ' + str(points_list[symbol]['value']))
-            points_list[symbol]['isCheck'] = True
+    if check == True:
+
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('Open')] = float(msg['k']['o'])
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('High')] = float(msg['k']['h'])
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('Low')] = float(msg['k']['l'])
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('Close')] = float(msg['k']['c'])
+        kilne_tracker[symbol].iloc[-1,
+                                   kilne_tracker[symbol].columns.get_loc('Volume')] = float(msg['k']['v'])
+        kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol]
+                                   .columns.get_loc('Quote_Volume')] = float(msg['k']['q'])
+
+        if len(points_list[symbol]) != 0:
+            if points_list[symbol]['status'] == False and pd.to_numeric(price) <= pd.to_numeric(points_list[symbol]['limit']):
+                points_list[symbol]['status'] = True
+                send_message('4H Track ----- ' + str(symbol) + '\n' +
+                             str(points_list[symbol]['d']) + ' -- ' + str(points_list[symbol]['h']) + '\n' +
+                             str(points_list[symbol]['d1']) + ' -- ' + str(points_list[symbol]['h1']) + '\n' +
+                             'M -- ' + str(points_list[symbol]['value']) + '\n' +
+                             str(points_list[symbol]['limit']) + ' -- ' + str(points_list[symbol]['num']) + '\n' +
+                             str("Fine, I'll Do It Myself..."),
+                             '-720702466')
+
+            elif points_list[symbol]['status'] == True and pd.to_numeric(price) >= pd.to_numeric(points_list[symbol]['limit']) and points_list[symbol]['isCross'] == False:
+                points_list[symbol]['isCross'] = True
+                send_message('4H Track ----- ' + str(symbol) + '\n' +
+                             str(points_list[symbol]['d']) + ' -- ' + str(points_list[symbol]['h']) + '\n' +
+                             str(points_list[symbol]['d1']) + ' -- ' + str(points_list[symbol]['h1']) + '\n' +
+                             'M -- ' + str(points_list[symbol]['value']) + '\n' +
+                             str(points_list[symbol]['limit']) + ' -- ' + str(points_list[symbol]['num']) + '\n' +
+                             str('Fly Me To The Moon...'),
+                             '-720702466')
+
+    else:
+
+        kilne_tracker[symbol] = kilne_tracker[symbol].append({
+            'Date': time,
+            'Open': msg['k']['o'],
+            'High': msg['k']['h'],
+            'Low': msg['k']['l'],
+            'Close': msg['k']['c'],
+            'Volume': msg['k']['v'],
+            'Quote_Volume': msg['k']['q'],
+        }, ignore_index=True)
+
+        checkTouch(symbol, time)
+
+
+def checkTouch(symbol, date):
+
+    if len(points_list[symbol]) != 0:
+
+        difference = (date - points_list[symbol]['d'])
+        total_seconds = difference.total_seconds()
+
+        hours = divmod(total_seconds, 14400)[0]
+
+        points_list[symbol]['limit'] = points_list[symbol]['h'] + \
+            (points_list[symbol]['value'] * hours)
+
+        points_list[symbol]['num'] = hours
 
 
 def realtime(msg):
@@ -210,6 +258,7 @@ class Stream():
 
 
 getData('4hr')
+
 
 stream = Stream()
 stream.start()

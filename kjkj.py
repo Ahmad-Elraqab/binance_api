@@ -14,7 +14,7 @@ import os
 import errno
 import concurrent.futures
 
-FILE_NAME = 'RSI-15M-stream--2'
+FILE_NAME = 'RSI-15M-stream_spec_vwap'
 coin_list = {}
 kilne_tracker = {}
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
@@ -101,7 +101,9 @@ def buy(symbol, time):
     try:
         status = coin_list[symbol]['active']
         buy_ = coin_list[symbol]['buy']
+        set_buy_ = coin_list[symbol]['set-buy']
         length = len(kilne_tracker[symbol])-1
+
         vwap20 = pd.to_numeric(
             kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('DIF_20')])
         vwap48 = pd.to_numeric(
@@ -118,11 +120,7 @@ def buy(symbol, time):
 
         # print(close)
         # print(list)
-        coin = (kilne_tracker[symbol].loc[length, 'Close'] - kilne_tracker[symbol].loc[length -
-                1, 'Close']) / kilne_tracker[symbol].loc[length, 'Close'] * 100
-        diff = (kilne_tracker[symbol].loc[length, 'Close'] -
-                list) / kilne_tracker[symbol].loc[length, 'Close'] * 100
-        if buy_ == False and status == True and close < kilne_tracker[symbol].loc[length, coin_list[symbol]['type']] and close > list and coin <= -2.5:
+        if buy_ == False and status == True and set_buy_ == True and close >= list and open >= list:
 
             coin_list[symbol]['buy'] = True
 
@@ -159,8 +157,8 @@ def buy(symbol, time):
                 'low': order.low,
                 'Volume': order.volume,
                 'RSI': order.rsi,
-                'DIFFFF': diff,
-                'coin': coin,
+                'DIFFFF': (kilne_tracker[symbol].loc[length, 'Close'] - list) / kilne_tracker[symbol].loc[length, 'Close'] * 100,
+                'coin': (kilne_tracker[symbol].loc[length, 'Close'] - kilne_tracker[symbol].loc[length-1, 'Close']) / kilne_tracker[symbol].loc[length, 'Close'] * 100,
                 'BTC': (pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Close']) - pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length-1, 'Close'])) / pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Close']) * 100,
                 'V-BTC': kilne_tracker[symbol].loc[length, 'Volume'],
                 'V-B': (pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Volume']) - pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length-1, 'Volume'])) / pd.to_numeric(kilne_tracker['BTCUSDT'].loc[length, 'Volume']) * 100,
@@ -170,6 +168,11 @@ def buy(symbol, time):
             excel_df = excel_df.append(msg, ignore_index=True)
 
             excel_df.to_csv(f'results/data@'+FILE_NAME+'.csv')
+
+        elif buy_ == False:
+            coin_list[symbol]['active'] = False
+            coin_list[symbol]['set-buy'] = False
+            coin_list[symbol]['status'] = False
 
     except Exception as e:
         pass
@@ -188,11 +191,11 @@ def checkSell(rate, order, price, time):
     elif price < order.low:
         order.low = price
 
-    difference = (order.endDate - order.startDate)
-    total_seconds = difference.total_seconds()
-    hours = divmod(total_seconds, 60)[0]
+    # difference = (order.endDate - order.startDate)
+    # total_seconds = difference.total_seconds()
+    # hours = divmod(total_seconds, 60)[0]
 
-    if rate > 0.5 or (rate <= -3.0) or hours >= 45.0:
+    if rate > 5.0 or (rate <= -3.0):
 
         coin_list[order.symbol]['active'] = False
         coin_list[order.symbol]['buy'] = False
@@ -216,14 +219,14 @@ def checkSell(rate, order, price, time):
     excel_df.loc[excel_df['id'] == order.id, 'high'] = order.high
     excel_df.loc[excel_df['id'] == order.id, 'low'] = order.low
 
-    if hours == 15.0:
-        excel_df.loc[excel_df['id'] == order.id, '15'] = rate
-    elif hours == 30.0:
-        excel_df.loc[excel_df['id'] == order.id, '30'] = rate
-    elif hours == 45.0:
-        excel_df.loc[excel_df['id'] == order.id, '45'] = rate
-    elif hours == 60.0:
-        excel_df.loc[excel_df['id'] == order.id, '60'] = rate
+    # if hours == 15.0:
+    #     excel_df.loc[excel_df['id'] == order.id, '15'] = rate
+    # elif hours == 30.0:
+    #     excel_df.loc[excel_df['id'] == order.id, '30'] = rate
+    # elif hours == 45.0:
+    #     excel_df.loc[excel_df['id'] == order.id, '45'] = rate
+    # elif hours == 60.0:
+    #     excel_df.loc[excel_df['id'] == order.id, '60'] = rate
 
     excel_df.to_csv(f'results/data@'+FILE_NAME+'.csv')
 
@@ -255,20 +258,15 @@ def checkTouch(symbol):
     status = coin_list[symbol]['active']
     length = len(kilne_tracker[symbol])-1
 
-    if pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) >= pd.to_numeric(vwap20) and status == False:
+    list = np.min([vwap20, vwap48, vwap84])
+
+    if pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) >= pd.to_numeric(list) and status == False:
 
         coin_list[symbol]['active'] = True
-        coin_list[symbol]['type'] = 'DIF_20'
 
-    elif pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) >= pd.to_numeric(vwap48) and status == False:
+    elif pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) <= pd.to_numeric(list) and status == True:
 
-        coin_list[symbol]['active'] = True
-        coin_list[symbol]['type'] = 'DIF_48'
-
-    elif pd.to_numeric(kilne_tracker[symbol].loc[length, 'Close']) >= pd.to_numeric(vwap84) and status == False:
-
-        coin_list[symbol]['active'] = True
-        coin_list[symbol]['type'] = 'DIF_84'
+        coin_list[symbol]['set-buy'] = True
 
 
 def updateFrame(symbol, msg):
@@ -314,9 +312,7 @@ def updateFrame(symbol, msg):
     calcVWAP(symbol=symbol, msg=msg, inte=48)
     calcVWAP(symbol=symbol, msg=msg, inte=84)
 
-    if coin_list[symbol]['active'] == False:
-
-        checkTouch(symbol=symbol)
+    checkTouch(symbol=symbol)
 
     sell(symbol, time, msg['k']['c'])
 
