@@ -1,3 +1,4 @@
+from asyncio.windows_events import NULL
 from datetime import datetime
 import threading
 import uuid
@@ -6,7 +7,7 @@ from binance.streams import ThreadedWebsocketManager
 import numpy as np
 from pandas.core.frame import DataFrame
 from client import send_message
-from config import API_KEY, API_SECRET, exchange_pairs
+from config import API_KEY, API_SECRET, exchange_pairs, exchange_pairs_count
 import pandas as pd
 import time
 import os
@@ -20,8 +21,8 @@ excel_df = DataFrame(columns=['id', 'symbol', 'type', 'interval', 'amount',
                               'startDate', 'endDate', 'buy', 'sell', 'growth/drop', 'closed', 'high', 'low', 'Volume', 'RSI'])
 ordersList = {}
 
-INTERVAL = '15m'
-H_HISTORY = Client.KLINE_INTERVAL_15MINUTE
+INTERVAL = '1m'
+H_HISTORY = Client.KLINE_INTERVAL_1MINUTE
 PART = '-'
 temp = False
 tempTime = None
@@ -59,7 +60,7 @@ def readHistory(i):
     print('start reading history of ' + str(i) + ' USDT pairs...')
 
     klines = client.get_historical_klines(
-        symbol=i, interval=H_HISTORY, start_str="3 days ago")
+        symbol=i, interval=H_HISTORY, start_str="20 hours ago")
 
     data = pd.DataFrame(klines)
 
@@ -79,7 +80,10 @@ def readHistory(i):
         {'s': i, 'status': False, 'price': data.iloc[-1, 4], 'buy': False, 'set-buy': False}, ignore_index=True)
 
     kilne_tracker[i] = data
-
+    calcVWAP(symbol=i, msg=NULL, inte=20)
+    calcVWAP(symbol=i, msg=NULL, inte=48)
+    calcVWAP(symbol=i, msg=NULL, inte=84)
+    calcVWAP(symbol=i, msg=NULL, inte=840)
     print(i + ' is loaded...')
 
 
@@ -158,18 +162,23 @@ def checkCross(symbol, msg):
                                             kilne_tracker[symbol].columns.get_loc('DIF_48')]
         vwap84 = kilne_tracker[symbol].iloc[-1,
                                             kilne_tracker[symbol].columns.get_loc('DIF_84')]
+        vwap840 = kilne_tracker[symbol].iloc[-1,
+                                             kilne_tracker[symbol].columns.get_loc('DIF_840')]
 
         check = c_df.loc[c_df['s'] == symbol]
 
         # if vwap20 >= vwap48 and vwap48 >= vwap84 and check.iloc[0]['status'] == False:
-        if vwap20 >= vwap48 and vwap20 >= vwap84 and check.iloc[0]['status'] == False:
+        if vwap48 >= vwap840 and check.iloc[0]['status'] == False:
+            
+            send_message(symbol + ' cross up\n', '-648641445')
 
             c_df.loc[c_df['s'] == symbol,
                      'price'] = pd.to_numeric(msg['k']['c'])
             c_df.loc[c_df['s'] == symbol, 'status'] = True
 
-        elif (vwap20 <= vwap48 or vwap48 <= vwap84) and check.iloc[0]['status'] == True:
+        elif vwap48 <= vwap840 and check.iloc[0]['status'] == True:
 
+            send_message(symbol + ' cross down\n', '-648641445')
             c_df.loc[c_df['s'] == symbol, 'status'] = False
             # c_df.loc[c_df['s'] == symbol, 'set-buy'] = False
 
@@ -269,7 +278,7 @@ def checkSell(rate, order, price, time):
     # hours = divmod(total_seconds, 60)[0]
     drop = (price - vwap84) / price * 100
     print(drop)
-    
+
     if rate >= 10.0:
         # if vwap20 < vwap48:
 
@@ -326,9 +335,38 @@ def updateFrame(symbol, msg):
     # print(msg)
     time = pd.to_datetime(msg['k']['t'], unit='ms')
     symbol = msg['s']
-
+    minute = time.minute
+    print(msg)
     check = np.where(
         kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol].columns.get_loc('Date')] == time, True, False)
+
+    # if (minute == 15 or minute == 30 or minute == 45 or minute == 59) and exchange_pairs_count['BTCUSDT']['ac'] == False:
+        
+    #     exchange_pairs_count['BTCUSDT']['ac'] = True
+    #     listP = []
+
+    #     for pair in exchange_pairs:
+
+    #         vwap840 = kilne_tracker[pair].iloc[-1,
+    #                                            kilne_tracker[pair].columns.get_loc('DIF_840')]
+    #         vwap48 = kilne_tracker[pair].iloc[-1,
+    #                                           kilne_tracker[pair].columns.get_loc('DIF_48')]
+
+    #         if vwap48 >= vwap840:
+
+    #             listP.append(
+    #                 {
+    #                     'key': pair,
+    #                     'vwap48': str(vwap48),
+    #                     'vwap840': str(vwap840),
+    #                 }
+    #             )
+    #             newlist = sorted(listP, key=lambda x: x['key'], reverse=True)
+    #             msg = '\t\tTOP 10 COINS\n\n'
+    #             for i in newlist[0:10]:
+    #                 msg += 'S : ' + i['key'] + '\t' + 'vwap48 : ' + \
+    #                     i['vwap48'] + 'vwap840 : ' + i['vwap840'] + '\n'
+    #             send_message(msg, '-648641445')
 
     if check == True:
 
@@ -345,25 +383,30 @@ def updateFrame(symbol, msg):
         kilne_tracker[symbol].iloc[-1, kilne_tracker[symbol]
                                    .columns.get_loc('Quote_Volume')] = float(msg['k']['q'])
     else:
+        
+        if symbol == 'BTCUSDT':
+            exchange_pairs_count[symbol]['ac'] = False
+        
         kilne_tracker[symbol] = kilne_tracker[symbol].append({
             'Date': time,
-            'Open': msg['k']['o'],
-            'High': msg['k']['h'],
-            'Low': msg['k']['l'],
-            'Close': msg['k']['c'],
-            'Volume': msg['k']['v'],
-            'Quote_Volume': msg['k']['q'],
+            'Open': pd.to_numeric(msg['k']['o']),
+            'High': pd.to_numeric(msg['k']['h']),
+            'Low': pd.to_numeric(msg['k']['l']),
+            'Close': pd.to_numeric(msg['k']['c']),
+            'Volume': pd.to_numeric(msg['k']['v']),
+            'Quote_Volume': pd.to_numeric(msg['k']['q']),
         }, ignore_index=True)
 
     calcVWAP(symbol=symbol, msg=msg, inte=20)
     calcVWAP(symbol=symbol, msg=msg, inte=48)
     calcVWAP(symbol=symbol, msg=msg, inte=84)
+    calcVWAP(symbol=symbol, msg=msg, inte=840)
     calcRSI(symbol=symbol)
     calcDailyChange(symbol=symbol)
 
     checkCross(symbol, msg)
-    buy(symbol, time)
-    sell(symbol, time, msg['k']['c'])
+    # buy(symbol, time)
+    # sell(symbol, time, msg['k']['c'])
 
 
 def handle_socket(msg):
@@ -415,7 +458,7 @@ class Stream():
                     callback=realtime, streams=self.multiplex_list)
 
 
-send_message('NEW')
+send_message('NEW', '-648641445')
 
 
 def init():

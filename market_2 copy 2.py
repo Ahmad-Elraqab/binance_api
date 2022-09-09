@@ -1,4 +1,3 @@
-from asyncio.windows_events import NULL
 import math
 import threading
 import time
@@ -11,7 +10,7 @@ import pandas
 import pandas as pd
 from pytz import HOUR
 from client import send_message
-from config import API_KEY, API_SECRET, exchange_pairs, exchange_pairs_count
+from config import API_KEY, API_SECRET, exchange_pairs
 import concurrent.futures
 from binance.client import AsyncClient, Client
 from datetime import date, datetime
@@ -25,10 +24,16 @@ client = Client(api_key=API_KEY, api_secret=API_SECRET)
 points = {}
 orders = []
 kilne_tracker = {}
+kilne_status = {}
 points_list = {}
 
 excel_df = pandas.DataFrame(columns=['Id', 'Symbol', 'Date', 'Price',
-                            'BC', 'SC', 'TPS', 'Volume', 'DIFF', 'ZSCORE', 'High', 'Low', 'Close'])
+                            'BC', 'SC', 'TPS', 'Volume', 'DIFF', 'ZSCORE',
+                                     'High', 'Low', 'Close', 'sell', 'sold', 's-high', 's-low',
+                                     's-date', 'p1', 'd1', 'p2', 'd2', 'p', 'DIF_48', 'DIF_84',
+                                     'DIF_484', 'DIF_840', 'DIF_450', 'VWAP_48', 'VWAP_84',
+                                     'VWAP_484', 'VWAP_840', 'VWAP_450',
+                                     ])
 
 
 _date = datetime.now()
@@ -96,11 +101,11 @@ def updateFrame(symbol, msg):
             'Quote_Volume': msg['k']['q'],
         }, ignore_index=True)
 
-        calcVWAP(symbol=symbol, msg=NULL, inte=48)
-        calcVWAP(symbol=symbol, msg=NULL, inte=84)
-        calcVWAP(symbol=symbol, msg=NULL, inte=484)
-        calcVWAP(symbol=symbol, msg=NULL, inte=840)
-        calcVWAP(symbol=symbol, msg=NULL, inte=4500)
+    calcVWAP(symbol=symbol, msg=msg, inte=48)
+    calcVWAP(symbol=symbol, msg=msg, inte=84)
+    calcVWAP(symbol=symbol, msg=msg, inte=484)
+    calcVWAP(symbol=symbol, msg=msg, inte=840)
+    calcVWAP(symbol=symbol, msg=msg, inte=4500)
 
     setDatafFame(symbol=symbol)
 
@@ -141,7 +146,7 @@ def readHistory(i):
     global kilne_tracker
 
     klines = client.get_historical_klines(
-        symbol=i, interval=Client.KLINE_INTERVAL_1MINUTE, start_str='20 hours ago UTC')
+        symbol=i, interval=Client.KLINE_INTERVAL_1MINUTE, start_str='12 hours ago UTC')
 
     data = pd.DataFrame(klines)
     data[0] = pd.to_datetime(data[0], unit='ms')
@@ -164,6 +169,7 @@ def readHistory(i):
     data['48-zscore'] = 0
 
     kilne_tracker[i] = data
+    kilne_status[i] = False
 
     calcVWAP(symbol=i, msg=data, inte=48)
     calcVWAP(symbol=i, msg=data, inte=84)
@@ -299,7 +305,7 @@ def realtime(msg):
         if '@kline_1m' in msg['stream']:
 
             updateFrame(symbol=symbol, msg=msg['data'])
-
+            time = pd.to_datetime(msg['data']['k']['t'], unit='ms')
             price = kilne_tracker[symbol].iloc[-1,
                                                kilne_tracker[symbol].columns.get_loc('Close')]
 
@@ -308,26 +314,17 @@ def realtime(msg):
             excel_df.loc[excel_df['Symbol'] == symbol, 'Close'] = price
 
             t_data = excel_df.loc[excel_df['Symbol'] == symbol]
-            time = pandas.to_datetime(msg['data']['k']['t'], unit='ms')
 
             for i, value in t_data.iterrows():
 
-                if time.minute == 15 or time.minute == 30 or time.minute == 45 or time.minute == 59:
+                rate = ((float(price) - float(value['Price'])) /
+                        float(value['Price'])) * 100
+                rate_2 = ((float(price) - float(value['p'])) /
+                          float(value['p'])) * 100
 
-                    if exchange_pairs_count[symbol]['count'] < 6 and exchange_pairs_count[symbol]['ac'] == False:
+                # zscore = kilne_tracker[symbol].iloc[-1,
+                #                                     kilne_tracker[symbol].columns.get_loc('48-zscore')]
 
-                        exchange_pairs_count[symbol]['ac'] = True
-
-                        excel_df.loc[excel_df['Id'] ==
-                                     value['Id'], str(time)+'/high'] = value['High']
-                        excel_df.loc[excel_df['Id'] ==
-                                     value['Id'], str(time)+'/low'] = value['Low']
-                        excel_df.loc[excel_df['Id'] ==
-                                     value['Id'], str(time)+'/H%'] = (pd.to_numeric(value['High']) / pd.to_numeric(price)) - 1
-                        excel_df.loc[excel_df['Id'] ==
-                                     value['Id'], str(time)+'/L%'] = (pd.to_numeric(value['Low']) / pd.to_numeric(price)) - 1
-
-                        exchange_pairs_count[symbol]['count'] += 1
                 if pd.to_numeric(price) > pd.to_numeric(value['High']):
 
                     excel_df.loc[excel_df['Id'] == value['Id'], 'High'] = price
@@ -336,10 +333,58 @@ def realtime(msg):
 
                     excel_df.loc[excel_df['Id'] == value['Id'], 'Low'] = price
 
+                if value['sold'] == False:
+
+                    if rate >= 1.5:
+
+                        kilne_status[symbol] = False
+                        excel_df.loc[excel_df['Id'] ==
+                                     value['Id'], 's-date'] = time
+                        excel_df.loc[excel_df['Id'] ==
+                                     value['Id'], 'sold'] = True
+                        excel_df.loc[excel_df['Id'] ==
+                                     value['Id'], 'sell'] = price
+                        excel_df.loc[excel_df['Id'] ==
+                                     value['Id'], 's-high'] = value['High']
+                        excel_df.loc[excel_df['Id'] ==
+                                     value['Id'], 's-low'] = value['Low']
+
+                    elif rate_2 <= -2.0 and value['p1'] == None:
+
+                        excel_df.loc[excel_df['Id'] == value['Id'], 'Price'] = (
+                            pd.to_numeric(value['p']) + pd.to_numeric(price)) / 2
+                        excel_df.loc[excel_df['Id'] ==
+                                     value['Id'], 'p1'] = price
+                        excel_df.loc[excel_df['Id'] ==
+                                     value['Id'], 'd1'] = time
+
+                    elif rate_2 <= -4.0 and value['p2'] == None and value['p1'] != None:
+
+                        excel_df.loc[excel_df['Id'] == value['Id'], 'Price'] = (pd.to_numeric(
+                            value['p']) + pd.to_numeric(value['p1']) + pd.to_numeric(price)) / 3
+                        excel_df.loc[excel_df['Id'] ==
+                                     value['Id'], 'p2'] = price
+                        excel_df.loc[excel_df['Id'] ==
+                                     value['Id'], 'd2'] = time
+
+                    elif rate_2 <= -6.0 and value['p2'] != None and value['p1'] != None:
+
+                        kilne_status[symbol] = False
+                        excel_df.loc[excel_df['Id'] ==
+                                     value['Id'], 's-date'] = time
+                        excel_df.loc[excel_df['Id'] ==
+                                     value['Id'], 'sold'] = True
+                        excel_df.loc[excel_df['Id'] ==
+                                     value['Id'], 'sell'] = price
+                        excel_df.loc[excel_df['Id'] ==
+                                     value['Id'], 's-high'] = value['High']
+                        excel_df.loc[excel_df['Id'] ==
+                                     value['Id'], 's-low'] = value['Low']
+
             t_data = None
 
             try:
-                excel_df.to_csv(f'results/data--1@loop.csv', header=True)
+                excel_df.to_csv(f'results/data-4@loop.csv', header=True)
             except Exception as e:
 
                 print(e)
@@ -389,7 +434,6 @@ def handle_socket_message(msg):
                     points[symbol][day][hour][minute]['SD']
 
             else:
-                exchange_pairs_count[symbol]['ac'] = False
 
                 printTop(time, msg['T'])
 
@@ -448,21 +492,32 @@ def printTop(time, _t):
 
                             price = kilne_tracker[key].iloc[-1,
                                                             kilne_tracker[key].columns.get_loc('Close')]
-                            if tps > 1:
+                            zscore = kilne_tracker[key].iloc[-1,
+                                                             kilne_tracker[key].columns.get_loc('48-zscore')]
+                            if tps > 1 and zscore <= -1.5 and kilne_status[key] == False:
+
+                                kilne_status[key] = True
                                 excel_dff = {
                                     'Id': uuid.uuid1(),
                                     'Symbol': str(key),
                                     'Date': str(time),
+                                    'p': str(price),
                                     'Price': str(price),
                                     'BC': str(t1[-1]['BC']),
                                     'SC': str(t1[-1]['SC']),
                                     'TPS': str(tps),
                                     'Volume': str(t1[-1]['V']),
                                     'DIFF': str(t1[-1]['DIFF']),
-                                    'ZSCORE': kilne_tracker[key].iloc[-1, kilne_tracker[key].columns.get_loc('48-zscore')],
+                                    'ZSCORE': zscore,
                                     'High': str(price),
                                     'Low': str(price),
                                     'Close': str(price),
+                                    'sell': 0,
+                                    'sold': False,
+                                    'd1': None,
+                                    'd2': None,
+                                    'p1': None,
+                                    'p2': None,
                                     'DIF_48': kilne_tracker[key].iloc[-1, kilne_tracker[key].columns.get_loc('DIF_48')],
                                     'DIF_84': kilne_tracker[key].iloc[-1, kilne_tracker[key].columns.get_loc('DIF_84')],
                                     'DIF_484': kilne_tracker[key].iloc[-1, kilne_tracker[key].columns.get_loc('DIF_484')],
@@ -479,7 +534,7 @@ def printTop(time, _t):
                                     excel_dff, ignore_index=True)
                                 try:
                                     excel_df.to_csv(
-                                        f'results/data--1@loop.csv', header=True)
+                                        f'results/data-4@loop.csv', header=True)
                                 except Exception as e:
 
                                     print(e)
@@ -499,7 +554,7 @@ def printTop(time, _t):
                                        + 'TPS : ' +
                                        str(tps) + '\n')
 
-                                send_message(str(msg), '-797825865')
+                                send_message(str(msg), '-639026936')
                     else:
                         print(key + ' - ' + str(len(t1)))
                 except Exception as e:

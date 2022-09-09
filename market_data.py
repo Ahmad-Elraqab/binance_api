@@ -11,7 +11,6 @@ import concurrent.futures
 from binance.client import AsyncClient, Client
 from datetime import date, datetime
 from binance.streams import ThreadedWebsocketManager
-import keyboard
 
 client = Client(api_key=API_KEY, api_secret=API_SECRET)
 
@@ -101,16 +100,18 @@ def getData(symbol):
         print(e)
 
 
-t1 = time.perf_counter()
+# t1 = time.perf_counter()
 
-with concurrent.futures.ThreadPoolExecutor() as executor:
+# with concurrent.futures.ThreadPoolExecutor() as executor:
 
-    executor.map(getData, exchange_pairs)
+#     executor.map(getData, exchange_pairs)
 
-t2 = time.perf_counter()
+# t2 = time.perf_counter()
 
 
 def realtime(msg):
+
+    print(msg)
     if 'data' in msg:
         
         handle_socket_message(msg['data'])
@@ -177,8 +178,7 @@ def handle_socket_message(msg):
 class Stream():
 
     def start(self):
-        self.bm = ThreadedWebsocketManager(
-            api_key=API_KEY, api_secret=API_SECRET)
+        self.bm = ThreadedWebsocketManager()
         self.bm.start()
         self.stream_error = False
         self.multiplex_list = list()
